@@ -2,6 +2,9 @@ package com.nexastream.app
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
@@ -12,6 +15,7 @@ import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.Build
 import android.net.Uri
 import android.view.Gravity
 import android.view.View
@@ -24,6 +28,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.Manifest
+import android.content.pm.PackageManager
 import android.text.InputType
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
@@ -63,8 +69,10 @@ class MainActivity : Activity() {
         }
         setContentView(root)
         root.requestApplyInsets()
+        createNotificationChannel()
         handleOAuthCallback(intent)
         showTab("Accueil")
+        checkForFollowedLiveNotifications()
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -90,7 +98,7 @@ class MainActivity : Activity() {
                     val user = api.currentUser()
                     prefs.edit().putString("twitch_user_id", user.optString("id"))
                         .putString("twitch_user_name", user.optString("display_name")).apply()
-                    runOnUiThread { toast("Connecté à Twitch : " + user.optString("display_name")); showTab("Accueil") }
+                    runOnUiThread { toast("Connecté à Twitch : " + user.optString("display_name")); showTab("Accueil"); checkForFollowedLiveNotifications() }
                 } catch (e: Exception) {
                     prefs.edit().remove("twitch_access_token").apply()
                     runOnUiThread { toast("Connexion refusée : " + (e.message ?: "erreur Twitch")) }
@@ -223,7 +231,9 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-2, dp(46)))
         label(shell, name, 28f, Color.WHITE, true, top = 20)
         label(shell, "Lives de cette catégorie", 15f, muted, top = 6, bottom = 16)
-        emptyState(shell, "◈", "Aucun flux chargé pour l’instant", "La page est native et prête à recevoir les résultats Helix de la catégorie « $name ». L’API Twitch n’est pas encore autorisée dans cette version.")
+        val categoryResults = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        shell.addView(categoryResults, fullWidth())
+        loadSearchResults(name, categoryResults)
         shell.addView(actionButton("Configurer la connexion", "Paramètres") { showTab("Paramètres") },
             LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(16) })
     }
@@ -270,6 +280,49 @@ class MainActivity : Activity() {
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         shell.addView(results, fullWidth())
         loadSearchResults(query, results)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(NotificationChannel("nexastream_live", "Lives suivis", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Alertes lorsqu’une chaîne suivie démarre un live"
+            })
+        }
+    }
+
+    private fun checkForFollowedLiveNotifications() {
+        val token = prefs.getString("twitch_access_token", null) ?: return
+        val userId = prefs.getString("twitch_user_id", null) ?: return
+        if (BuildConfig.TWITCH_CLIENT_ID.isBlank()) return
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1701)
+            return
+        }
+        Thread {
+            try {
+                val streams = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token).followedStreams(userId)
+                val currentIds = streams.map { it.id }.toSet()
+                val previous = prefs.getStringSet("known_live_ids", emptySet()) ?: emptySet()
+                val newlyLive = if (previous.isEmpty()) emptyList() else streams.filter { it.id !in previous }
+                newlyLive.forEachIndexed { index, stream ->
+                    val intent = android.content.Intent(this, MainActivity::class.java).apply {
+                        flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    }
+                    val pending = PendingIntent.getActivity(this, stream.id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                    val notification = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(this, "nexastream_live") else android.app.Notification.Builder(this)
+                    notification.setSmallIcon(android.R.drawable.ic_media_play)
+                        .setContentTitle(stream.userName + " est en direct")
+                        .setContentText(stream.title)
+                        .setContentIntent(pending)
+                        .setAutoCancel(true)
+                    (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(stream.id.hashCode(), notification.build())
+                }
+                prefs.edit().putStringSet("known_live_ids", currentIds).apply()
+            } catch (_: Exception) {
+                // Keep the notification page usable when Twitch is temporarily unreachable.
+            }
+        }.start()
     }
 
     private fun loadTopStreams(container: LinearLayout) {
@@ -405,8 +458,11 @@ class MainActivity : Activity() {
         label(parent, "CENTRE DE NOTIFICATIONS", 12f, purple, true)
         label(parent, "Ne rate plus un live.", 25f, Color.WHITE, true, top = 6)
         label(parent, "Les alertes seront affichées comme de vraies notifications Android, avec le nom et l’avatar de la chaîne.", 14f, muted, top = 8, bottom = 16)
-        emptyState(parent, "♧", "Notifications en préparation", "Les notifications réelles nécessitent l’autorisation du compte Twitch et un mécanisme fiable pour détecter les changements de statut des chaînes suivies. Aucune fausse alerte n’est créée.")
-        actionCard(parent, "⚙", "Connexion et autorisations", "Consulter la configuration Twitch") { showTab("Paramètres") }
+        val liveContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        parent.addView(liveContainer, fullWidth())
+        loadFollowedStreams(liveContainer)
+        actionCard(parent, "⚙", "Connexion et autorisations", "Gérer le compte Twitch et les notifications Android") { showTab("Paramètres") }
+        label(parent, "La vérification actuelle se fait lorsque NexaStream est ouvert. Des alertes fiables même lorsque l’application est fermée nécessiteront un service de fond adapté ou une infrastructure EventSub.", 12f, muted, top = 8)
     }
 
     private fun settingsContent(parent: LinearLayout) {
