@@ -53,6 +53,7 @@ class FollowedLiveWorker(context: Context, params: WorkerParameters) : Worker(co
         }
         val intent = android.content.Intent(applicationContext, MainActivity::class.java).apply {
             flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("open_channel", channel)
         }
         val pending = PendingIntent.getActivity(
             applicationContext, notificationId, intent,
