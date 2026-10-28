@@ -86,7 +86,7 @@ class MainActivity : Activity() {
         val fragment = intent?.data?.fragment ?: return
         val values = fragment.split("&").mapNotNull { part ->
             val bits = part.split("=", limit = 2)
-            if (bits.size == 2) bits[bits[0]] = bits[1] else null
+            if (bits.size == 2) bits[0] to bits[1] else null
         }.toMap()
         val token = values["access_token"]
         if (!token.isNullOrBlank()) {
