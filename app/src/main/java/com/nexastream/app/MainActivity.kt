@@ -129,7 +129,7 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("Configurer Twitch")
-            .setMessage("Colle ici le Client ID public de ton application créée dans la console développeur Twitch. URI de redirection exacte à enregistrer : nexastream://auth. Ne colle jamais de Client Secret ni ton mot de passe.")
+            .setMessage("Colle ici le Client ID public de ton application créée dans la console développeur Twitch. La connexion utilise un code temporaire Twitch, sans URI de redirection. Ne colle jamais de Client Secret ni ton mot de passe.")
             .setView(wrapper)
             .setNegativeButton("Annuler", null)
             .setNeutralButton("Effacer") { _, _ ->
@@ -202,7 +202,7 @@ class MainActivity : Activity() {
                 }
                 val received = token ?: throw IllegalStateException("Le code de connexion a expiré. Réessaie.")
                 prefs.edit().putString("twitch_access_token", received).apply()
-                val user = api.currentUserForToken(received)
+                val user = TwitchApi(clientId, received).currentUser()
                 prefs.edit().putString("twitch_user_id", user.optString("id"))
                     .putString("twitch_user_name", user.optString("display_name"))
                     .putStringSet("known_live_ids", emptySet()).apply()
@@ -624,7 +624,7 @@ class MainActivity : Activity() {
             showTab("Paramètres")
         }
         label(parent, "Connexion officielle", 18f, Color.WHITE, true, top = 12)
-        label(parent, "La connexion passe par Twitch OAuth et ne demande jamais ton mot de passe dans NexaStream. Crée l’application dans la console développeur Twitch, enregistre exactement nexastream://auth comme URI de redirection, puis colle son Client ID public ci-dessus. Cette configuration reste sur cet appareil et ne nécessite pas une nouvelle compilation.", 13f, muted, top = 6, bottom = 14)
+        label(parent, "La connexion utilise le flux officiel Twitch Device Code : NexaStream affiche un code temporaire, tu l’autorises sur Twitch, puis l’application récupère le jeton. Aucun mot de passe Twitch n’est saisi dans NexaStream. Il faut toutefois le Client ID public d’une application enregistrée dans la console développeur Twitch.", 13f, muted, top = 6, bottom = 14)
         actionCard(parent, "🛡", "Filtre de domaines", if (blockerEnabled) "Activé — filtre les requêtes ciblées par NexaStream" else "Désactivé") {
             blockerEnabled = !blockerEnabled
             prefs.edit().putBoolean("ad_blocker_enabled", blockerEnabled).apply()
@@ -634,8 +634,8 @@ class MainActivity : Activity() {
         actionCard(parent, "📺", "Android TV", "Cartes sélectionnables à la télécommande, focus visible") {
             toast("Utilise les flèches et OK de ta télécommande pour naviguer.")
         }
-        actionCard(parent, "▶", "Lecteur natif", "Le lecteur live sera intégré ici après accès officiel aux flux autorisés") {
-            toast("Le lecteur natif sera ajouté avec l’intégration du flux Twitch autorisé.")
+        actionCard(parent, "▶", "Lecteur officiel Twitch", "La lecture utilise le lecteur intégré autorisé de Twitch, pas une URL de flux extraite.") {
+            toast("Ouvre un live depuis Accueil, Découvrir ou Suivis pour tester le lecteur intégré.")
         }
         actionCard(parent, "ℹ", "Version", "NexaStream • interface native en développement") {
             toast("NexaStream • branche de test patch-1")
