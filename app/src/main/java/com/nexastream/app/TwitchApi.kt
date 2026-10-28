@@ -74,6 +74,35 @@ class TwitchApi(private val clientId: String, private val accessToken: String) {
         return (0 until streams.length()).map { streams.getJSONObject(it).toStream() }
     }
 
+    fun followedChannels(userId: String): List<TwitchChannel> {
+        val followed = request("channels/followed?user_id=" + URLEncoder.encode(userId, "UTF-8") + "&first=100").optJSONArray("data") ?: return emptyList()
+        val rows = (0 until followed.length()).map { followed.getJSONObject(it) }
+        if (rows.isEmpty()) return emptyList()
+        val ids = rows.map { it.optString("broadcaster_id") }.filter { it.isNotBlank() }
+        val liveStreams = runCatching {
+            val data = request("streams?first=100&" + ids.joinToString("&") { "user_id=" + URLEncoder.encode(it, "UTF-8") }).optJSONArray("data")
+            if (data == null) emptyMap() else (0 until data.length()).map { data.getJSONObject(it) }.associateBy { it.optString("user_id") }
+        }.getOrDefault(emptyMap())
+        val channelDetails = runCatching {
+            val data = request("channels?" + ids.joinToString("&") { "broadcaster_id=" + URLEncoder.encode(it, "UTF-8") }).optJSONArray("data")
+            if (data == null) emptyMap() else (0 until data.length()).map { data.getJSONObject(it) }.associateBy { it.optString("broadcaster_id") }
+        }.getOrDefault(emptyMap())
+        return rows.map { row ->
+            val id = row.optString("broadcaster_id")
+            val live = liveStreams[id]
+            val details = channelDetails[id]
+            TwitchChannel(
+                id = id,
+                name = row.optString("broadcaster_login"),
+                displayName = row.optString("broadcaster_name", row.optString("broadcaster_login")),
+                title = live?.optString("title") ?: details?.optString("title").orEmpty(),
+                gameName = live?.optString("game_name") ?: details?.optString("game_name").orEmpty(),
+                isLive = live != null,
+                thumbnailUrl = live?.optString("thumbnail_url").orEmpty()
+            )
+        }
+    }
+
     fun searchChannels(query: String, limit: Int = 20): List<TwitchChannel> {
         val q = URLEncoder.encode(query, "UTF-8")
         val rows = request("search/channels?query=$q&first=" + limit.coerceIn(1, 100)).optJSONArray("data") ?: return emptyList()
