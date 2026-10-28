@@ -9,7 +9,7 @@ android {
 
     buildFeatures { buildConfig = true }
 
-    val twitchClientId = providers.gradleProperty("TWITCH_CLIENT_ID").orElse("").get().replace("\\", "\\\\").replace("\"", "\\\"")
+    val twitchClientId = providers.gradleProperty("TWITCH_CLIENT_ID").orElse("x7utiyjp5sjc7h2gnqbc0yad57rkhd").get().replace("\\", "\\\\").replace("\"", "\\\"")
 
     defaultConfig {
         applicationId = "com.nexastream.app"
