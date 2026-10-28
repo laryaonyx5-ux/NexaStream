@@ -113,7 +113,6 @@ class MainActivity : Activity() {
             "Recherche" -> searchContent(content)
             "Suivis" -> followingContent(content)
             "Notifications" -> notificationsContent(content)
-            "Chat" -> chatContent(content)
             "Paramètres" -> settingsContent(content)
         }
         shell.addView(bottomNav(tab), LinearLayout.LayoutParams(-1, -2))
@@ -136,7 +135,6 @@ class MainActivity : Activity() {
         emptyState(parent, "◉", "Prêt pour les lives", "Cette zone est maintenant une vraie page native. Pour afficher les lives, titres, jeux, viewers et miniatures réels, NexaStream doit recevoir un identifiant client Twitch et une autorisation officielle.")
         actionCard(parent, "◈", "Découvrir", "Parcourir les catégories dans l’interface NexaStream") { showTab("Découvrir") }
         actionCard(parent, "♡", "Mes chaînes suivies", "Retrouver ici les chaînes de ton compte") { showTab("Suivis") }
-        actionCard(parent, "☷", "Chat Twitch officiel", "Le chat web officiel, pour les subs, émoticônes et prédictions disponibles") { showTab("Chat") }
         actionCard(parent, "♧", "Centre d’alertes", "Préparer les notifications natives de nouveaux lives") { showTab("Notifications") }
     }
 
@@ -225,92 +223,6 @@ class MainActivity : Activity() {
         actionCard(parent, "◎", "Préparer la connexion Twitch", "Voir ce qu’il manque pour l’authentification officielle") { showTab("Paramètres") }
     }
 
-    private fun chatContent(parent: LinearLayout) {
-        label(parent, "CHAT OFFICIEL", 12f, purple, true)
-        label(parent, "Le chat Twitch, comme sur le site.", 25f, Color.WHITE, true, top = 6)
-        label(parent, "Tu as raison : le chat est l’exception. On garde l’interface officielle Twitch dans cette seule partie pour conserver au mieux les abonnements payants (subs), émoticônes, points de chaîne, prédictions et autres fonctions proposées par Twitch.", 14f, muted, top = 8, bottom = 16)
-        val field = EditText(this).apply {
-            hint = "Nom de la chaîne (ex. twitch)"
-            setHintTextColor(muted)
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            setSingleLine(true)
-            setPadding(dp(15), 0, dp(15), 0)
-            background = rounded(panel, dp(15), Color.rgb(90, 55, 120), dp(1))
-            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_GO
-        }
-        parent.addView(field, fullWidth().apply { height = dp(54); bottomMargin = dp(12) })
-        parent.addView(actionButton("Ouvrir le chat officiel", "Ouvrir le chat Twitch officiel") {
-            val channel = field.text.toString().trim().removePrefix("@")
-            if (!channel.matches(Regex("[A-Za-z0-9_]{1,25}"))) {
-                toast("Entre un nom de chaîne Twitch valide.")
-            } else {
-                prefs.edit().putString("last_chat_channel", channel).apply()
-                openOfficialChat(channel)
-            }
-        }, fullWidth())
-        val last = prefs.getString("last_chat_channel", "") ?: ""
-        if (last.isNotBlank()) {
-            actionCard(parent, "☷", "Reprendre le chat de $last", "Rouvrir le chat officiel de cette chaîne") {
-                openOfficialChat(last)
-            }
-        }
-        sectionTitle(parent, "Pourquoi le chat est différent", "Interface officielle, le reste reste natif")
-        label(parent, "Les pages Accueil, Découvrir, Recherche, Suivis, Alertes et Réglages restent des écrans natifs NexaStream. Seul le chat utilise le WebView officiel afin de préserver les fonctions interactives de Twitch. Certaines fonctions peuvent dépendre de la connexion Twitch, de l’appareil ou des changements du site.", 13f, muted)
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun openOfficialChat(channel: String) {
-        chatWebView?.stopLoading()
-        chatWebView?.destroy()
-        root.removeAllViews()
-        currentTab = "Chat officiel"
-        val shell = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
-        }
-        val toolbar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(6), dp(10), dp(6))
-            background = rounded(Color.rgb(20, 13, 29), dp(12), Color.rgb(72, 43, 94), dp(1))
-        }
-        toolbar.addView(actionButton("‹  Retour", "Retour au menu Chat") { showTab("Chat") },
-            LinearLayout.LayoutParams(-2, dp(44)))
-        toolbar.addView(TextView(this).apply {
-            text = "Chat • $channel"
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            setPadding(dp(10), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        shell.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
-        val browser = WebView(this)
-        chatWebView = browser
-        browser.setBackgroundColor(Color.BLACK)
-        browser.settings.javaScriptEnabled = true
-        browser.settings.domStorageEnabled = true
-        browser.settings.loadsImagesAutomatically = true
-        browser.settings.javaScriptCanOpenWindowsAutomatically = true
-        browser.settings.setSupportMultipleWindows(false)
-        browser.settings.cacheMode = WebSettings.LOAD_DEFAULT
-        browser.settings.mediaPlaybackRequiresUserGesture = false
-        CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(browser, true)
-        browser.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                val requestUrl = request?.url?.toString() ?: return null
-                if (blockerEnabled && isKnownAdOrTracker(requestUrl)) {
-                    return WebResourceResponse("text/plain", "utf-8", 204, "Blocked by NexaStream", emptyMap(), ByteArrayInputStream(ByteArray(0)))
-                }
-                return super.shouldInterceptRequest(view, request)
-            }
-        }
-        shell.addView(browser, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(shell, FrameLayout.LayoutParams(-1, -1))
-        browser.loadUrl("https://www.twitch.tv/popout/" + Uri.encode(channel) + "/chat?popout=")
-    }
-
     private fun isKnownAdOrTracker(url: String): Boolean {
         val host = try { URI(url).host?.lowercase() ?: return false } catch (_: Exception) { return false }
         val blockedHosts = listOf("doubleclick.net", "googlesyndication.com", "googleadservices.com",
@@ -359,7 +271,7 @@ class MainActivity : Activity() {
             setPadding(dp(4), dp(5), dp(4), dp(5))
             background = rounded(Color.rgb(17, 12, 25), dp(18), Color.rgb(48, 32, 64), dp(1))
         }
-        val tabs = listOf("Accueil" to "⌂", "Découvrir" to "◈", "Chat" to "☷", "Suivis" to "♡", "Notifications" to "♧", "Paramètres" to "⚙")
+        val tabs = listOf("Accueil" to "⌂", "Découvrir" to "◈", "Suivis" to "♡", "Notifications" to "♧", "Paramètres" to "⚙")
         tabs.forEach { (name, symbol) ->
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
