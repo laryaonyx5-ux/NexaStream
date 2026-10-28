@@ -114,7 +114,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(dp(50), dp(46)))
         shell.addView(top)
 
-        val scroll = ScrollView(this).apply { fillViewport = true; isFocusable = false }
+        val scroll = ScrollView(this).apply { isFillViewport = true; isFocusable = false }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(4), dp(18), dp(18))
@@ -178,7 +178,7 @@ class MainActivity : Activity() {
             setHintTextColor(muted)
             setTextColor(Color.WHITE)
             textSize = 16f
-            singleLine = true
+            setSingleLine(true)
             setPadding(dp(15), 0, dp(15), 0)
             background = rounded(panel, dp(15), Color.rgb(90, 55, 120), dp(1))
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
