@@ -160,24 +160,76 @@ class MainActivity : Activity() {
             configureTwitchClientId()
             return
         }
-        // Twitch OAuth is opened in the system browser; Twitch does not support
-        // collecting account passwords inside a third-party app WebView.
-        val authUrl = Uri.Builder()
-            .scheme("https")
-            .authority("id.twitch.tv")
-            .appendPath("oauth2")
-            .appendPath("authorize")
-            .appendQueryParameter("client_id", clientId)
-            .appendQueryParameter("redirect_uri", "nexastream://auth")
-            .appendQueryParameter("response_type", "token")
-            .appendQueryParameter("scope", "user:read:follows")
-            .appendQueryParameter("force_verify", "true")
-            .build()
-        try {
-            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, authUrl))
-        } catch (e: Exception) {
-            toast("Impossible d’ouvrir la page officielle Twitch.")
-        }
+        toast("Préparation de la connexion officielle Twitch…")
+        Thread {
+            try {
+                val api = TwitchApi(clientId, "")
+                val device = api.requestDeviceCode()
+                val deviceCode = device.optString("device_code")
+                val userCode = device.optString("user_code")
+                val verifyUrl = device.optString("verification_uri", "https://www.twitch.tv/activate")
+                val interval = device.optInt("interval", 5).coerceAtLeast(3)
+                val expiresIn = device.optInt("expires_in", 1800)
+                if (deviceCode.isBlank() || userCode.isBlank()) throw IllegalStateException("Twitch n’a pas fourni de code de connexion.")
+                runOnUiThread {
+                    AlertDialog.Builder(this)
+                        .setTitle("Connexion officielle Twitch")
+                        .setMessage("1. Ouvre la page officielle Twitch.\n2. Saisis ce code :\n\n$userCode\n\nLaisse NexaStream ouvert pendant la validation.")
+                        .setNegativeButton("Annuler", null)
+                        .setNeutralButton("Copier le code") { _, _ ->
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Code Twitch", userCode))
+                            toast("Code Twitch copié.")
+                        }
+                        .setPositiveButton("Ouvrir Twitch") { _, _ ->
+                            try {
+                                startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(verifyUrl)))
+                            } catch (_: Exception) {
+                                toast("Ouvre twitch.tv/activate dans ton navigateur.")
+                            }
+                            Thread {
+                                val deadline = System.currentTimeMillis() + expiresIn * 1000L
+                                var finished = false
+                                while (!finished && System.currentTimeMillis() < deadline) {
+                                    try {
+                                        val tokenResponse = api.pollDeviceToken(deviceCode)
+                                        val token = tokenResponse.optString("access_token")
+                                        if (token.isNotBlank()) {
+                                            val user = TwitchApi(clientId, token).currentUser()
+                                            prefs.edit().putString("twitch_access_token", token)
+                                                .putString("twitch_user_id", user.optString("id"))
+                                                .putString("twitch_user_name", user.optString("display_name"))
+                                                .apply()
+                                            runOnUiThread {
+                                                toast("Connecté à Twitch : " + user.optString("display_name"))
+                                                showTab("Accueil")
+                                                checkForFollowedLiveNotifications()
+                                            }
+                                            finished = true
+                                        } else {
+                                            Thread.sleep(interval * 1000L)
+                                        }
+                                    } catch (e: Exception) {
+                                        val message = e.message.orEmpty().lowercase()
+                                        if (message.contains("authorization_pending") || message.contains("pending")) {
+                                            try { Thread.sleep(interval * 1000L) } catch (_: InterruptedException) { finished = true }
+                                        } else if (message.contains("slow_down")) {
+                                            try { Thread.sleep((interval + 5) * 1000L) } catch (_: InterruptedException) { finished = true }
+                                        } else {
+                                            runOnUiThread { toast("Connexion Twitch : " + (e.message ?: "réessaie")) }
+                                            finished = true
+                                        }
+                                    }
+                                }
+                                if (!finished) runOnUiThread { toast("Code expiré. Relance la connexion Twitch.") }
+                            }.start()
+                        }
+                        .show()
+                }
+            } catch (e: Exception) {
+                runOnUiThread { toast("Impossible de démarrer la connexion Twitch : " + (e.message ?: "erreur réseau")) }
+            }
+        }.start()
     }
 
     @Suppress("DEPRECATION")
@@ -589,7 +641,7 @@ class MainActivity : Activity() {
             showTab("Paramètres")
         }
         label(parent, "Connexion officielle", 18f, Color.WHITE, true, top = 12)
-        label(parent, "La connexion ouvre la page officielle Twitch dans ton navigateur. Dans la console développeur Twitch, l’URI de redirection autorisée doit correspondre exactement à nexastream://auth. Aucun mot de passe Twitch n’est saisi dans NexaStream.", 13f, muted, top = 6, bottom = 14)
+        label(parent, "La connexion utilise le code temporaire officiel Twitch : ouvre la page d’activation, saisis le code affiché et laisse NexaStream ouvert pendant la validation. Aucun mot de passe Twitch n’est saisi dans NexaStream et aucune URL de redirection n’est nécessaire.", 13f, muted, top = 6, bottom = 14)
         actionCard(parent, "🛡", "Filtre de domaines", if (blockerEnabled) "Activé — filtre les requêtes ciblées par NexaStream" else "Désactivé") {
             blockerEnabled = !blockerEnabled
             prefs.edit().putBoolean("ad_blocker_enabled", blockerEnabled).apply()
