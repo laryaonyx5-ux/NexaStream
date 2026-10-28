@@ -7,10 +7,10 @@ NexaStream is a native Android / Android TV interface for discovering and watchi
 - Native French home, discovery, search, followed channels, notifications and settings screens.
 - Focusable cards and remote-friendly navigation for Android TV.
 - Honest empty states: live listings, channel follows and notifications are not fabricated.
-- Twitch Device Code OAuth handling and a Helix client are implemented for top live streams, channel search, followed channels (online and offline) and user identity. The app now lets the user save the public Twitch Client ID on-device in Settings, without rebuilding the APK. A real Client ID and the exact redirect URI `nexastream://auth` registered in the Twitch Developer Console are still required.
+- Twitch Device Code OAuth handling and a Helix client are implemented for top live streams, channel search, followed channels (online and offline) and user identity. The app now lets the user save the public Twitch Client ID on-device in Settings, without rebuilding the APK. A real Client ID from a Twitch Developer application is still required.
 - Search, discovery and followed-live screens display API-backed data after login; they show honest empty/error states rather than fabricated streams when authentication or network calls fail.
 - Android WorkManager periodically checks followed live channels in the background (Android controls exact timing). Notifications require permission on Android 13+ and a valid OAuth token; expired tokens require reconnecting.
-- The current ad-filter setting is groundwork only. General ad/tracker filtering can be improved for NexaStream-owned requests, but this is not a system-wide content blocker and cannot guarantee removal of Twitch in-stream ads, especially ads delivered with the stream itself.
+- The ad filter blocks a list of known general ad/tracker domains in the embedded live screen. It is not a system-wide blocker and cannot guarantee removal of Twitch ads delivered by Twitch’s own video infrastructure.
 
 ## Twitch setup
 
