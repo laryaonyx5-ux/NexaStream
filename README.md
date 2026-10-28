@@ -7,7 +7,7 @@ NexaStream is a native Android / Android TV interface for discovering and watchi
 - Native French home, discovery, search, followed channels, notifications and settings screens.
 - Focusable cards and remote-friendly navigation for Android TV.
 - Honest empty states: live listings, channel follows and notifications are not fabricated.
-- Twitch OAuth callback handling and a Helix client are implemented for top live streams, channel search, followed channels (online and offline) and user identity. The app now lets the user save the public Twitch Client ID on-device in Settings, without rebuilding the APK. A real Client ID and the exact redirect URI `nexastream://auth` registered in the Twitch Developer Console are still required.
+- Twitch Device Code OAuth handling and a Helix client are implemented for top live streams, channel search, followed channels (online and offline) and user identity. The app now lets the user save the public Twitch Client ID on-device in Settings, without rebuilding the APK. A real Client ID and the exact redirect URI `nexastream://auth` registered in the Twitch Developer Console are still required.
 - Search, discovery and followed-live screens display API-backed data after login; they show honest empty/error states rather than fabricated streams when authentication or network calls fail.
 - Android notifications can check for newly live followed channels when NexaStream is opened. Continuous notifications while the app is closed still need a reliable background/EventSub service and are not claimed as finished.
 - The current ad-filter setting is groundwork only. General ad/tracker filtering can be improved for NexaStream-owned requests, but this is not a system-wide content blocker and cannot guarantee removal of Twitch in-stream ads, especially ads delivered with the stream itself.
@@ -16,8 +16,8 @@ NexaStream is a native Android / Android TV interface for discovering and watchi
 
 1. Register NexaStream in the Twitch Developer Console.
 2. Register the redirect URI exactly as `nexastream://auth`.
-3. Install the APK and open Settings → Client ID Twitch. Paste the public Client ID there; this value is saved locally on the device and does not require another build. Alternatively, a build may provide the Gradle property `TWITCH_CLIENT_ID` as a default.
-4. In Settings, choose Twitch login. NexaStream opens Twitch’s official authorization page; it does not ask for the Twitch password inside the app. Never put a Client Secret into the APK.
+3. Create an application in the Twitch Developer Console and copy its public Client ID. Paste it in Settings → Client ID Twitch; it is stored on-device and does not require another build. Alternatively, configure the Gradle property `TWITCH_CLIENT_ID` as a default. Never put a Client Secret into the APK.
+4. In Settings, choose Twitch login. NexaStream uses Twitch’s official Device Code flow: open Twitch’s activation page and enter the temporary code shown by the app. NexaStream never asks for your Twitch password.
 
 ## Important implementation note
 
