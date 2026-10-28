@@ -2,6 +2,7 @@ package com.nexastream.app
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.PictureInPictureParams
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -19,6 +20,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -328,7 +330,7 @@ class MainActivity : Activity() {
                 textSize = 12f
                 setTextColor(Color.WHITE)
                 background = rounded(Color.rgb(39, 21, 57), dp(16), Color.rgb(151, 58, 255), dp(1))
-                setOnClickListener { webView?.loadUrl("https://www.twitch.tv/directory/all/clips") }
+                setOnClickListener { showClipsChannelDialog() }
             }
             toolbar.addView(clipsButton, LinearLayout.LayoutParams(-2, dp(44)).apply { marginStart = dp(6) })
             val miniPlayer = Button(this).apply {
@@ -370,6 +372,29 @@ class MainActivity : Activity() {
         browser.loadUrl("https://www.twitch.tv/")
     }
 
+    private fun showClipsChannelDialog() {
+        val channelInput = EditText(this).apply {
+            hint = "Nom de la chaîne Twitch"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Clips Twitch")
+            .setMessage("La page générale des clips Twitch a été retirée. Entre le nom d’une chaîne pour afficher ses clips.")
+            .setView(channelInput)
+            .setNegativeButton("Annuler", null)
+            .setPositiveButton("Afficher les clips") { _, _ ->
+                val channel = channelInput.text.toString().trim()
+                    .removePrefix("@")
+                if (channel.matches(Regex("[A-Za-z0-9_]{1,25}"))) {
+                    webView?.loadUrl("https://www.twitch.tv/$channel/clips?filter=clips&range=7d")
+                } else {
+                    android.widget.Toast.makeText(this, "Entre un nom de chaîne Twitch valide.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            .show()
+    }
+
     private fun isKnownAdOrTracker(url: String): Boolean {
         val host = try { URI(url).host?.lowercase() ?: return false } catch (_: Exception) { return false }
         val blockedHosts = listOf(
@@ -378,7 +403,12 @@ class MainActivity : Activity() {
             "scorecardresearch.com", "quantserve.com", "analytics.tiktok.com",
             "adnxs.com", "ads-twitter.com", "adsrvr.org", "adform.net",
             "taboola.com", "outbrain.com", "criteo.com", "rubiconproject.com",
-            "pubmatic.com", "openx.net", "casalemedia.com", "advertising.com"
+            "pubmatic.com", "openx.net", "casalemedia.com", "advertising.com",
+            "serving-sys.com", "3lift.com", "lijit.com", "media.net",
+            "yieldmo.com", "smartadserver.com", "33across.com", "sharethrough.com",
+            "undertone.com", "contextweb.com", "bidswitch.net", "imrworldwide.com",
+            "branch.io", "app-measurement.com", "adjust.com", "appsflyer.com",
+            "hotjar.com", "mixpanel.com", "segment.io", "segment.com"
         )
         return blockedHosts.any { host == it || host.endsWith(".$it") }
     }
