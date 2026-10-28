@@ -126,67 +126,117 @@ class MainActivity : Activity() {
         page.addView(subtitle)
 
         val cards = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
         page.addView(cards, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        val blockerCard = createCard()
-        val shield = TextView(this).apply {
-            textSize = 48f
+        val blockerCard = createCard().apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        }
+        val blockerSymbol = TextView(this).apply {
+            textSize = 34f
             gravity = Gravity.CENTER
             typeface = Typeface.DEFAULT_BOLD
         }
-        blockerIcon = shield
-        blockerCard.addView(shield, LinearLayout.LayoutParams(-1, dp(66)))
-        blockerCard.addView(TextView(this).apply {
-            text = "Bloqueur de\npublicités"
-            gravity = Gravity.CENTER
-            textSize = 17f
+        blockerIcon = blockerSymbol
+        blockerCard.addView(blockerSymbol, LinearLayout.LayoutParams(dp(58), -1))
+        val blockerTexts = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        blockerTexts.addView(TextView(this).apply {
+            text = "Bloqueur de publicités"
+            gravity = Gravity.START
+            textSize = 16f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
-            setPadding(0, dp(7), 0, dp(14))
         })
         val state = TextView(this).apply {
             gravity = Gravity.CENTER
-            textSize = 14f
+            textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setPadding(dp(10), dp(4), dp(10), dp(4))
         }
         blockerState = state
-        blockerCard.addView(state, LinearLayout.LayoutParams(-1, dp(42)))
+        blockerTexts.addView(state, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(5) })
+        blockerCard.addView(blockerTexts, LinearLayout.LayoutParams(0, -1, 1f))
         blockerCard.setOnClickListener {
             blockerEnabled = !blockerEnabled
             prefs.edit().putBoolean("ad_blocker_enabled", blockerEnabled).apply()
             updateBlockerVisuals()
         }
-        cards.addView(blockerCard, LinearLayout.LayoutParams(0, dp(220), 1f).apply { marginEnd = dp(8) })
+        cards.addView(blockerCard, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = dp(8) })
 
-        val twitchCard = createCard()
+        val twitchCard = createCard().apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        }
         twitchCard.addView(TextView(this).apply {
             text = "◎"
             gravity = Gravity.CENTER
-            textSize = 54f
+            textSize = 40f
             typeface = Typeface.DEFAULT
             setTextColor(Color.rgb(174, 91, 255))
-        }, LinearLayout.LayoutParams(-1, dp(66)))
-        twitchCard.addView(TextView(this).apply {
+        }, LinearLayout.LayoutParams(dp(58), -1))
+        val twitchTexts = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        twitchTexts.addView(TextView(this).apply {
             text = "Twitch Web"
-            gravity = Gravity.CENTER
-            textSize = 18f
+            gravity = Gravity.START
+            textSize = 17f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
-            setPadding(0, dp(7), 0, dp(14))
         })
-        twitchCard.addView(TextView(this).apply {
-            text = "Ouvrir Twitch"
-            gravity = Gravity.CENTER
-            textSize = 14f
+        twitchTexts.addView(TextView(this).apply {
+            text = "Ouvrir le site Twitch"
+            gravity = Gravity.START
+            textSize = 13f
             setTextColor(Color.rgb(178, 139, 238))
-        }, LinearLayout.LayoutParams(-1, dp(42)))
-        twitchCard.setOnClickListener { openTwitch() }
-        cards.addView(twitchCard, LinearLayout.LayoutParams(0, dp(220), 1f).apply { marginStart = dp(8) })
+            setPadding(0, dp(4), 0, 0)
+        })
+        twitchCard.addView(twitchTexts, LinearLayout.LayoutParams(0, -1, 1f))
+        twitchCard.setOnClickListener { openTwitch("Twitch Web") }
+        cards.addView(twitchCard, LinearLayout.LayoutParams(-1, 0, 1f).apply { bottomMargin = dp(8) })
 
+        val integratedCard = createCard().apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        }
+        integratedCard.addView(TextView(this).apply {
+            text = "✦"
+            gravity = Gravity.CENTER
+            textSize = 40f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(174, 91, 255))
+        }, LinearLayout.LayoutParams(dp(58), -1))
+        val integratedTexts = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        integratedTexts.addView(TextView(this).apply {
+            text = "Twitch intégré"
+            gravity = Gravity.START
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+        })
+        integratedTexts.addView(TextView(this).apply {
+            text = "Twitch Web + fonctions NexaStream"
+            gravity = Gravity.START
+            textSize = 12f
+            setTextColor(Color.rgb(178, 139, 238))
+            setPadding(0, dp(4), 0, 0)
+        })
+        integratedCard.addView(integratedTexts, LinearLayout.LayoutParams(0, -1, 1f))
+        integratedCard.setOnClickListener { openTwitch("Twitch intégré") }
+        cards.addView(integratedCard, LinearLayout.LayoutParams(-1, 0, 1f))
         val footer = TextView(this).apply {
             text = "Navigation web intégrée"
             gravity = Gravity.CENTER
@@ -227,7 +277,7 @@ class MainActivity : Activity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun openTwitch() {
+    private fun openTwitch(screenTitle: String = "Twitch Web") {
         root.removeAllViews()
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -248,7 +298,7 @@ class MainActivity : Activity() {
         }
         toolbar.addView(back, LinearLayout.LayoutParams(-2, dp(44)))
         toolbar.addView(TextView(this).apply {
-            text = "  Twitch Web"
+            text = "  $screenTitle"
             textSize = 18f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
