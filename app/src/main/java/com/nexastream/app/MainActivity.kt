@@ -281,6 +281,8 @@ class MainActivity : Activity() {
         parent.addView(hero, fullWidth().apply { bottomMargin = dp(22) })
 
         actionCard(parent, "◎", "Se connecter à Twitch", "Connecte ton compte pour charger tes chaînes suivies") { startTwitchOAuth() }
+        actionCard(parent, "▣", "Twitch Web", "Ouvrir Twitch dans NexaStream") { openTwitchPage("Twitch Web") }
+        actionCard(parent, "✦", "Twitch intégré", "Twitch dans l’application avec les fonctions NexaStream") { openTwitchPage("Twitch intégré") }
         sectionTitle(parent, "En direct", "Les streams officiels Twitch, triés par audience")
         val liveContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         parent.addView(liveContainer, fullWidth())
@@ -519,6 +521,48 @@ class MainActivity : Activity() {
                 runOnUiThread { container.removeAllViews(); emptyState(container, "!", "Recherche impossible", e.message ?: "Erreur réseau Twitch.") }
             }
         }.start()
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun openTwitchPage(screenTitle: String) {
+        currentTab = screenTitle
+        chatWebView?.stopLoading()
+        chatWebView?.destroy()
+        chatWebView = null
+        root.removeAllViews()
+        root.addView(CircuitBackground(this), FrameLayout.LayoutParams(-1, -1))
+        val shell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+        }
+        root.addView(shell, FrameLayout.LayoutParams(-1, -1))
+        shell.addView(actionButton("‹  Accueil", "Retour à l’accueil") { showTab("Accueil") },
+            LinearLayout.LayoutParams(-2, dp(44)))
+        label(shell, screenTitle, 20f, Color.WHITE, true, top = 10, bottom = 8)
+        val browser = WebView(this)
+        chatWebView = browser
+        browser.setBackgroundColor(Color.BLACK)
+        browser.settings.javaScriptEnabled = true
+        browser.settings.domStorageEnabled = true
+        browser.settings.loadsImagesAutomatically = true
+        browser.settings.javaScriptCanOpenWindowsAutomatically = false
+        browser.settings.setSupportMultipleWindows(false)
+        browser.settings.mediaPlaybackRequiresUserGesture = true
+        browser.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(browser, true)
+        browser.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                val url = request?.url?.toString() ?: return null
+                if (blockerEnabled && isKnownAdOrTracker(url)) {
+                    return WebResourceResponse("text/plain", "utf-8", 204, "Blocked by NexaStream",
+                        emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+        }
+        shell.addView(browser, LinearLayout.LayoutParams(-1, 0, 1f))
+        browser.loadUrl("https://www.twitch.tv/")
     }
 
     private fun openLive(channel: String) {
