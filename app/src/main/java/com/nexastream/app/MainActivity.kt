@@ -49,7 +49,20 @@ class MainActivity : Activity() {
         blockerEnabled = prefs.getBoolean("ad_blocker_enabled", true)
         root = FrameLayout(this)
         root.setBackgroundColor(Color.rgb(10, 8, 16))
+
+        // Keep app content inside the usable screen area, below the status bar
+        // and above Android's navigation bar, including Android 15 edge-to-edge.
+        root.setOnApplyWindowInsetsListener { view, insets ->
+            view.setPadding(
+                insets.systemWindowInsetLeft,
+                insets.systemWindowInsetTop,
+                insets.systemWindowInsetRight,
+                insets.systemWindowInsetBottom
+            )
+            insets
+        }
         setContentView(root)
+        root.requestApplyInsets()
         showHome()
     }
 
