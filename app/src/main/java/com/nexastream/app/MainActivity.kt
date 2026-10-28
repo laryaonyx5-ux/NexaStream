@@ -396,21 +396,33 @@ class MainActivity : Activity() {
     }
 
     private fun isKnownAdOrTracker(url: String): Boolean {
-        val host = try { URI(url).host?.lowercase() ?: return false } catch (_: Exception) { return false }
+        val parsed = try { URI(url) } catch (_: Exception) { return false }
+        val host = parsed.host?.lowercase() ?: return false
         val blockedHosts = listOf(
             "doubleclick.net", "googlesyndication.com", "googleadservices.com",
             "adnxs.com", "adsystem.com", "adservice.google.com", "amazon-adsystem.com",
             "scorecardresearch.com", "quantserve.com", "analytics.tiktok.com",
-            "adnxs.com", "ads-twitter.com", "adsrvr.org", "adform.net",
-            "taboola.com", "outbrain.com", "criteo.com", "rubiconproject.com",
-            "pubmatic.com", "openx.net", "casalemedia.com", "advertising.com",
-            "serving-sys.com", "3lift.com", "lijit.com", "media.net",
-            "yieldmo.com", "smartadserver.com", "33across.com", "sharethrough.com",
-            "undertone.com", "contextweb.com", "bidswitch.net", "imrworldwide.com",
-            "branch.io", "app-measurement.com", "adjust.com", "appsflyer.com",
-            "hotjar.com", "mixpanel.com", "segment.io", "segment.com"
+            "ads-twitter.com", "adsrvr.org", "adform.net", "taboola.com",
+            "outbrain.com", "criteo.com", "rubiconproject.com", "pubmatic.com",
+            "openx.net", "casalemedia.com", "advertising.com", "moatads.com",
+            "serving-sys.com", "3lift.com", "bidswitch.net", "smartadserver.com",
+            "teads.tv", "yieldmo.com", "lijit.com", "sharethrough.com",
+            "media.net", "adroll.com", "branch.io", "app-measurement.com",
+            "segment.io", "segment.com", "hotjar.com", "mixpanel.com",
+            "amplitude.com", "clarity.ms", "optimizely.com"
         )
-        return blockedHosts.any { host == it || host.endsWith(".$it") }
+        if (blockedHosts.any { host == it || host.endsWith(".$it") }) return true
+
+        // Heuristic filtering for common ad/analytics endpoints; avoids blocking generic "ads" URLs.
+        val pathAndQuery = (parsed.path.orEmpty() + "?" + parsed.query.orEmpty()).lowercase()
+        val blockedMarkers = listOf(
+            "/pagead/", "/gampad/", "/adserver/", "/adservice/",
+            "/adsystem/", "/tracking/", "/track/", "/pixel.gif",
+            "/analytics/", "/beacon/", "/telemetry/"
+        )
+        return blockedMarkers.any { pathAndQuery.contains(it) } ||
+            host.startsWith("ads.") || host.startsWith("adserver.") ||
+            host.startsWith("tracking.") || host.startsWith("analytics.")
     }
 
     private fun rounded(fill: Int, radius: Int, stroke: Int, strokeWidth: Int): GradientDrawable =
