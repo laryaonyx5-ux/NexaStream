@@ -557,7 +557,7 @@ class MainActivity : Activity() {
                 return super.shouldInterceptRequest(view, request)
             }
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                val host = request.url.host?.lowercase().orEmpty()
+                val host = request?.url?.host?.lowercase().orEmpty()
                 return host !in setOf("www.twitch.tv", "twitch.tv", "player.twitch.tv", "m.twitch.tv", "id.twitch.tv", "api.twitch.tv", "static-cdn.jtvnw.net", "gql.twitch.tv")
             }
         }
