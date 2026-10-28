@@ -1,8 +1,6 @@
 package com.nexastream.app
 
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Canvas
@@ -11,19 +9,11 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Bundle
-import android.util.Rational
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.KeyEvent
-import android.webkit.CookieManager
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -31,17 +21,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import java.io.ByteArrayInputStream
-import java.net.URI
 
 class MainActivity : Activity() {
     private lateinit var root: FrameLayout
     private lateinit var prefs: SharedPreferences
     private var blockerEnabled = true
-    private var webView: WebView? = null
-    private var browserToolbar: View? = null
     private var currentTab = "Accueil"
-
+    private var searchQuery = ""
     private val purple = Color.rgb(169, 91, 255)
     private val muted = Color.rgb(183, 164, 207)
     private val bg = Color.rgb(10, 8, 16)
@@ -66,36 +52,23 @@ class MainActivity : Activity() {
         showTab("Accueil")
     }
 
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        browserToolbar?.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
-    }
-
-    private fun enterMiniPlayer() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && webView != null) {
-            try { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()) }
-            catch (_: Exception) { toast("Le mini-lecteur n’est pas disponible sur cet appareil.") }
-        } else toast("Ouvre d’abord un live pour utiliser le mini-lecteur.")
-    }
-
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
-        val browser = webView
-        if (browser != null && browser.canGoBack()) browser.goBack()
-        else if (browser != null) showTab("Accueil")
-        else if (currentTab != "Accueil") showTab("Accueil")
-        else super.onBackPressed()
+        if (currentTab != "Accueil") showTab("Accueil") else super.onBackPressed()
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && currentTab != "Accueil") {
+            showTab("Accueil")
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     private fun showTab(tab: String) {
-        webView?.stopLoading()
-        webView?.destroy()
-        webView = null
-        browserToolbar = null
         currentTab = tab
         root.removeAllViews()
         root.addView(CircuitBackground(this), FrameLayout.LayoutParams(-1, -1))
-
         val shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(shell, FrameLayout.LayoutParams(-1, -1))
         val top = LinearLayout(this).apply {
@@ -103,13 +76,12 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), dp(12), dp(18), dp(10))
         }
-        val brand = TextView(this).apply {
+        top.addView(TextView(this).apply {
             text = "⬡  NexaStream"
             textSize = 23f
             typeface = Typeface.create("sans-serif", Typeface.BOLD)
             setTextColor(Color.WHITE)
-        }
-        top.addView(brand, LinearLayout.LayoutParams(0, -2, 1f))
+        }, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(actionButton("⌕", "Rechercher") { showTab("Recherche") }.apply { textSize = 25f },
             LinearLayout.LayoutParams(dp(50), dp(46)))
         shell.addView(top)
@@ -138,102 +110,134 @@ class MainActivity : Activity() {
             setPadding(dp(20), dp(24), dp(20), dp(22))
             background = gradientCard()
         }
-        label(hero, "TON UNIVERS, EN DIRECT", 11f, purple, true)
+        label(hero, "NEXASTREAM • MODE NATIF", 11f, purple, true)
         label(hero, "Les lives, à ta façon.", 28f, Color.WHITE, true, top = 10)
-        label(hero, "Une expérience Twitch repensée pour mobile et Android TV.", 15f, muted, top = 8)
-        hero.addView(actionButton("▶   Explorer les lives", "Découvrir") { showTab("Découvrir") },
+        label(hero, "Une interface conçue pour naviguer sans ouvrir de pages web à chaque menu.", 15f, muted, top = 8)
+        hero.addView(actionButton("Explorer les catégories  →", "Découvrir") { showTab("Découvrir") },
             LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(18) })
         parent.addView(hero, fullWidth().apply { bottomMargin = dp(22) })
 
-        sectionTitle(parent, "Accès rapide", "Tes portes d’entrée")
-        actionCard(parent, "◉", "Ouvrir Twitch", "Se connecter ou regarder sur le site officiel") { openTwitch("Twitch officiel", "https://www.twitch.tv/") }
-        actionCard(parent, "⌕", "Découvrir les lives", "Parcourir les catégories Twitch") { openTwitch("Découvrir Twitch", "https://www.twitch.tv/directory") }
-        actionCard(parent, "♡", "Mes suivis", "Préparer l’espace de tes chaînes suivies") { showTab("Suivis") }
-        sectionTitle(parent, "À propos de NexaStream", "Une interface native, en construction")
-        label(parent, "Les menus et la navigation sont intégrés à l’application. Les lives et les données du compte nécessitent les connexions officielles de Twitch ; aucune chaîne ou notification fictive n’est affichée.", 13f, muted)
+        sectionTitle(parent, "En direct", "Le flux réel apparaîtra ici après connexion à l’API Twitch")
+        emptyState(parent, "◉", "Prêt pour les lives", "Cette zone est maintenant une vraie page native. Pour afficher les lives, titres, jeux, viewers et miniatures réels, NexaStream doit recevoir un identifiant client Twitch et une autorisation officielle.")
+        actionCard(parent, "◈", "Découvrir", "Parcourir les catégories dans l’interface NexaStream") { showTab("Découvrir") }
+        actionCard(parent, "♡", "Mes chaînes suivies", "Retrouver ici les chaînes de ton compte") { showTab("Suivis") }
+        actionCard(parent, "♧", "Centre d’alertes", "Préparer les notifications natives de nouveaux lives") { showTab("Notifications") }
     }
 
     private fun discoverContent(parent: LinearLayout) {
         label(parent, "DÉCOUVRIR", 12f, purple, true)
         label(parent, "Trouve ton prochain live", 25f, Color.WHITE, true, top = 6)
-        label(parent, "Choisis une catégorie pour l’ouvrir sur Twitch. Les résultats en direct viennent du service officiel, pas de données inventées.", 14f, muted, top = 8, bottom = 16)
+        label(parent, "Les catégories sont affichées dans NexaStream. Elles seront alimentées par les données officielles Twitch lorsque la connexion API sera configurée.", 14f, muted, top = 8, bottom = 16)
         val categories = listOf(
-            Triple("🎮", "Jeux vidéo", "https://www.twitch.tv/directory/category/games"),
-            Triple("🗣", "Just Chatting", "https://www.twitch.tv/directory/category/just-chatting"),
-            Triple("🎵", "Musique", "https://www.twitch.tv/directory/category/music"),
-            Triple("🏆", "Esport", "https://www.twitch.tv/directory"),
-            Triple("🎨", "Création", "https://www.twitch.tv/directory"),
-            Triple("🔥", "Tendances", "https://www.twitch.tv/directory")
+            Triple("🎮", "Jeux vidéo", "games"),
+            Triple("🗣", "Just Chatting", "just-chatting"),
+            Triple("🎵", "Musique", "music"),
+            Triple("🏆", "Esport", "esports"),
+            Triple("🎨", "Création", "art"),
+            Triple("🔥", "Tendances", "trending")
         )
-        categories.forEach { (icon, name, url) -> actionCard(parent, icon, name, "Voir les chaînes et les lives sur Twitch") { openTwitch(name, url) } }
-        actionButton("Ouvrir tout l’annuaire Twitch  ↗", "Annuaire Twitch") { openTwitch("Annuaire Twitch", "https://www.twitch.tv/directory") }
-            .also { parent.addView(it, fullWidth().apply { topMargin = dp(10) }) }
+        categories.forEach { (icon, name, key) ->
+            actionCard(parent, icon, name, "Ouvrir cette catégorie dans NexaStream") {
+                prefs.edit().putString("selected_category", key).apply()
+                showCategoryDetail(name, key)
+            }
+        }
+    }
+
+    private fun showCategoryDetail(name: String, key: String) {
+        currentTab = "Catégorie"
+        root.removeAllViews()
+        root.addView(CircuitBackground(this), FrameLayout.LayoutParams(-1, -1))
+        val shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(12)) }
+        root.addView(shell, FrameLayout.LayoutParams(-1, -1))
+        shell.addView(actionButton("‹  Découvrir", "Retour aux catégories") { showTab("Découvrir") },
+            LinearLayout.LayoutParams(-2, dp(46)))
+        label(shell, name, 28f, Color.WHITE, true, top = 20)
+        label(shell, "Lives de cette catégorie", 15f, muted, top = 6, bottom = 16)
+        emptyState(shell, "◈", "Aucun flux chargé pour l’instant", "La page est native et prête à recevoir les résultats Helix de la catégorie « $name ». L’API Twitch n’est pas encore autorisée dans cette version.")
+        shell.addView(actionButton("Configurer la connexion", "Paramètres") { showTab("Paramètres") },
+            LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(16) })
     }
 
     private fun searchContent(parent: LinearLayout) {
         label(parent, "RECHERCHE", 12f, purple, true)
-        label(parent, "Qui veux-tu regarder ?", 25f, Color.WHITE, true, top = 6)
+        label(parent, "Que veux-tu regarder ?", 25f, Color.WHITE, true, top = 6)
         val field = EditText(this).apply {
             hint = "Chaîne, jeu ou catégorie"
             setHintTextColor(muted)
             setTextColor(Color.WHITE)
             textSize = 16f
             setSingleLine(true)
+            setText(searchQuery)
             setPadding(dp(15), 0, dp(15), 0)
             background = rounded(panel, dp(15), Color.rgb(90, 55, 120), dp(1))
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
-            setOnEditorActionListener { _, _, _ ->
-                val query = text.toString().trim()
-                if (query.isNotEmpty()) openTwitch("Recherche", "https://www.twitch.tv/search?term=" + Uri.encode(query))
-                true
-            }
         }
         parent.addView(field, fullWidth().apply { height = dp(54); topMargin = dp(18); bottomMargin = dp(12) })
-        parent.addView(actionButton("Rechercher sur Twitch  ⌕", "Rechercher") {
-            val query = field.text.toString().trim()
-            if (query.isEmpty()) toast("Saisis un nom de chaîne, un jeu ou une catégorie.")
-            else openTwitch("Recherche", "https://www.twitch.tv/search?term=" + Uri.encode(query))
-        }, fullWidth())
-        sectionTitle(parent, "Idées", "Pour commencer")
-        listOf("Minecraft", "Just Chatting", "Musique", "Esport").forEach { term ->
-            actionCard(parent, "⌕", term, "Rechercher « $term » sur Twitch") {
-                openTwitch("Recherche : $term", "https://www.twitch.tv/search?term=" + Uri.encode(term))
+        parent.addView(actionButton("Rechercher dans NexaStream  ⌕", "Rechercher") {
+            searchQuery = field.text.toString().trim()
+            if (searchQuery.isEmpty()) toast("Saisis un nom de chaîne, un jeu ou une catégorie.")
+            else {
+                prefs.edit().putString("last_search", searchQuery).apply()
+                showSearchResults(searchQuery)
             }
+        }, fullWidth())
+        sectionTitle(parent, "Suggestions", "Exemples de recherches")
+        listOf("Minecraft", "Just Chatting", "Musique", "Esport").forEach { term ->
+            actionCard(parent, "⌕", term, "Rechercher dans NexaStream") { searchQuery = term; showSearchResults(term) }
         }
+    }
+
+    private fun showSearchResults(query: String) {
+        currentTab = "Résultats"
+        root.removeAllViews()
+        root.addView(CircuitBackground(this), FrameLayout.LayoutParams(-1, -1))
+        val shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(12), dp(18), dp(12)) }
+        root.addView(shell, FrameLayout.LayoutParams(-1, -1))
+        shell.addView(actionButton("‹  Recherche", "Retour à la recherche") { showTab("Recherche") },
+            LinearLayout.LayoutParams(-2, dp(46)))
+        label(shell, "Résultats", 27f, Color.WHITE, true, top = 18)
+        label(shell, "« $query »", 15f, muted, top = 5, bottom = 14)
+        emptyState(shell, "⌕", "Recherche native prête", "Les résultats réels de chaînes, jeux et catégories seront affichés ici dès que l’identifiant client Twitch et l’autorisation API seront configurés.")
     }
 
     private fun followingContent(parent: LinearLayout) {
         label(parent, "TES CHAÎNES", 12f, purple, true)
         label(parent, "Tes suivis, au même endroit.", 25f, Color.WHITE, true, top = 6)
-        label(parent, "Connecte-toi via Twitch pour retrouver ton compte. La synchronisation native des abonnements nécessite la connexion OAuth officielle ; cet écran ne prétend pas déjà y avoir accès.", 14f, muted, top = 8, bottom = 18)
-        actionCard(parent, "◎", "Se connecter à Twitch", "Ouvrir le site officiel pour te connecter") { openTwitch("Connexion Twitch", "https://www.twitch.tv/login") }
-        actionCard(parent, "♡", "Voir mes chaînes suivies", "Ouvrir la liste officielle des chaînes suivies") { openTwitch("Chaînes suivies", "https://www.twitch.tv/directory/following") }
-        label(parent, "Quand l’accès officiel sera configuré, cette page pourra afficher les chaînes dans des cartes natives et alimenter les notifications.", 13f, muted, top = 14)
+        label(parent, "Cette page sera alimentée par les chaînes suivies de ton compte Twitch, avec avatars, statut en direct et aperçu du stream.", 14f, muted, top = 8, bottom = 18)
+        emptyState(parent, "♡", "Aucun compte connecté", "La liste n’est pas inventée : elle attend la connexion OAuth Twitch et les autorisations nécessaires pour lire les suivis.")
+        actionCard(parent, "◎", "Préparer la connexion Twitch", "Voir ce qu’il manque pour l’authentification officielle") { showTab("Paramètres") }
     }
 
     private fun notificationsContent(parent: LinearLayout) {
         label(parent, "CENTRE DE NOTIFICATIONS", 12f, purple, true)
         label(parent, "Ne rate plus un live.", 25f, Color.WHITE, true, top = 6)
-        label(parent, "NexaStream est conçu pour réunir ici les alertes de tes chaînes suivies.", 14f, muted, top = 8, bottom = 16)
-        actionCard(parent, "♧", "Connexion Twitch requise", "Les alertes réelles demandent l’accès autorisé à ton compte et aux événements Twitch.") { openTwitch("Connexion Twitch", "https://www.twitch.tv/login") }
-        actionCard(parent, "◉", "Tester les lives sur Twitch", "Consulter les lives de tes chaînes suivies") { openTwitch("Chaînes suivies", "https://www.twitch.tv/directory/following") }
-        label(parent, "Important : les notifications natives de nouveaux lives ne sont pas encore actives dans cette version. Il faudra brancher l’authentification et le mécanisme officiel de suivi des événements ; je ne simule pas de fausses alertes.", 13f, muted, top = 14)
+        label(parent, "Les alertes seront affichées comme de vraies notifications Android, avec le nom et l’avatar de la chaîne.", 14f, muted, top = 8, bottom = 16)
+        emptyState(parent, "♧", "Notifications en préparation", "Les notifications réelles nécessitent l’autorisation du compte Twitch et un mécanisme fiable pour détecter les changements de statut des chaînes suivies. Aucune fausse alerte n’est créée.")
+        actionCard(parent, "⚙", "Connexion et autorisations", "Consulter la configuration Twitch") { showTab("Paramètres") }
     }
 
     private fun settingsContent(parent: LinearLayout) {
         label(parent, "PERSONNALISATION", 12f, purple, true)
         label(parent, "Paramètres", 25f, Color.WHITE, true, top = 6)
-        actionCard(parent, "🛡", "Filtre de publicités connu", if (blockerEnabled) "Activé — filtre certains domaines publicitaires" else "Désactivé") {
+        actionCard(parent, "◎", "Connexion officielle Twitch", "État : identifiant client OAuth non configuré") {
+            toast("Il faudra configurer un Client ID Twitch dans la configuration de compilation avant d’activer OAuth. Aucun mot de passe Twitch ne sera demandé à NexaStream.")
+        }
+        label(parent, "Connexion officielle", 18f, Color.WHITE, true, top = 12)
+        label(parent, "La connexion sera faite par Twitch OAuth, sans demander ton mot de passe à NexaStream. Pour activer cette étape, il faut enregistrer l’application dans le portail développeur Twitch et définir son Client ID et son URI de redirection. Je ne peux pas inventer ces identifiants.", 13f, muted, top = 6, bottom = 14)
+        actionCard(parent, "🛡", "Filtre de domaines", if (blockerEnabled) "Activé — filtre les requêtes ciblées par NexaStream" else "Désactivé") {
             blockerEnabled = !blockerEnabled
             prefs.edit().putBoolean("ad_blocker_enabled", blockerEnabled).apply()
             showTab("Paramètres")
         }
-        label(parent, "Ce filtre bloque certains domaines connus dans le navigateur intégré. Il ne garantit pas le blocage des publicités vidéo Twitch : elles peuvent être diffusées depuis la même infrastructure que le contenu.", 13f, muted, top = 8, bottom = 14)
-        actionCard(parent, "▶", "Mini-lecteur", "Disponible pendant la lecture dans le navigateur intégré") { openTwitch("Twitch intégré", "https://www.twitch.tv/") }
-        actionCard(parent, "📺", "Mode Android TV", "Navigation pensée pour télécommande et pavé directionnel") {
-            toast("Utilise les flèches de la télécommande pour sélectionner les cartes.")
+        label(parent, "Le filtre sera appliqué aux requêtes réseau prises en charge par l’application. Les pubs vidéo intégrées aux flux Twitch ne peuvent pas être garanties bloquées, notamment lorsqu’elles utilisent la même infrastructure que la vidéo. L’objectif est de filtrer les domaines publicitaires généraux sans prétendre remplacer totalement uBlock Origin.", 13f, muted, top = 6, bottom = 14)
+        actionCard(parent, "📺", "Android TV", "Cartes sélectionnables à la télécommande, focus visible") {
+            toast("Utilise les flèches et OK de ta télécommande pour naviguer.")
         }
-        actionCard(parent, "ℹ", "Version", "NexaStream — aperçu natif en développement") {
+        actionCard(parent, "▶", "Lecteur natif", "Le lecteur live sera intégré ici après accès officiel aux flux autorisés") {
+            toast("Le lecteur natif sera ajouté avec l’intégration du flux Twitch autorisé.")
+        }
+        actionCard(parent, "ℹ", "Version", "NexaStream • interface native en développement") {
             toast("NexaStream • branche de test patch-1")
         }
     }
@@ -268,6 +272,19 @@ class MainActivity : Activity() {
             bar.addView(item, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(2); marginEnd = dp(2) })
         }
         return bar
+    }
+
+    private fun emptyState(parent: LinearLayout, symbol: String, title: String, description: String) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(20), dp(22), dp(20), dp(22))
+            background = rounded(Color.argb(235, 22, 16, 32), dp(20), Color.rgb(72, 43, 94), dp(1))
+        }
+        label(card, symbol, 34f, purple, true)
+        label(card, title, 18f, Color.WHITE, true, top = 10)
+        label(card, description, 13f, muted, top = 7)
+        parent.addView(card, fullWidth().apply { bottomMargin = dp(12) })
     }
 
     private fun sectionTitle(parent: LinearLayout, title: String, subtitle: String) {
@@ -335,61 +352,7 @@ class MainActivity : Activity() {
     private fun rounded(fill: Int, radius: Int, stroke: Int, strokeWidth: Int): GradientDrawable =
         GradientDrawable().apply { setColor(fill); cornerRadius = radius.toFloat(); if (strokeWidth > 0) setStroke(strokeWidth, stroke) }
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
-    private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun openTwitch(screenTitle: String, url: String) {
-        webView?.destroy()
-        root.removeAllViews()
-        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(bg) }
-        val toolbar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(5), dp(10), dp(5))
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Color.rgb(29, 16, 44), Color.rgb(12, 10, 18)))
-        }
-        toolbar.addView(actionButton("‹ Accueil", "Retour à l’accueil") { showTab("Accueil") },
-            LinearLayout.LayoutParams(-2, dp(44)))
-        toolbar.addView(TextView(this).apply {
-            text = screenTitle; textSize = 16f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE); setPadding(dp(10), 0, 0, 0)
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        toolbar.addView(actionButton("Mini-lecteur", "Activer le mini-lecteur") { enterMiniPlayer() },
-            LinearLayout.LayoutParams(-2, dp(44)))
-        browserToolbar = toolbar
-        container.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
-        val browser = WebView(this)
-        webView = browser
-        browser.setBackgroundColor(Color.BLACK)
-        browser.settings.javaScriptEnabled = true
-        browser.settings.domStorageEnabled = true
-        browser.settings.loadsImagesAutomatically = true
-        browser.settings.javaScriptCanOpenWindowsAutomatically = true
-        browser.settings.setSupportMultipleWindows(false)
-        browser.settings.cacheMode = WebSettings.LOAD_DEFAULT
-        browser.settings.mediaPlaybackRequiresUserGesture = false
-        browser.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(browser, true)
-        browser.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                val requestUrl = request?.url?.toString() ?: return null
-                if (blockerEnabled && isKnownAdOrTracker(requestUrl))
-                    return WebResourceResponse("text/plain", "utf-8", 204, "Blocked by NexaStream", emptyMap(), ByteArrayInputStream(ByteArray(0)))
-                return super.shouldInterceptRequest(view, request)
-            }
-        }
-        container.addView(browser, LinearLayout.LayoutParams(-1, 0, 1f))
-        root.addView(container, FrameLayout.LayoutParams(-1, -1))
-        browser.loadUrl(url)
-    }
-
-    private fun isKnownAdOrTracker(url: String): Boolean {
-        val host = try { URI(url).host?.lowercase() ?: return false } catch (_: Exception) { return false }
-        val blockedHosts = listOf("doubleclick.net", "googlesyndication.com", "googleadservices.com",
-            "adnxs.com", "adsystem.com", "adservice.google.com", "amazon-adsystem.com",
-            "scorecardresearch.com", "quantserve.com", "analytics.tiktok.com")
-        return blockedHosts.any { host == it || host.endsWith(".$it") }
-    }
+    private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
     private class CircuitBackground(context: Context) : View(context) {
         private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
