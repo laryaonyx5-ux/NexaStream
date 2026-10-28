@@ -156,67 +156,28 @@ class MainActivity : Activity() {
     private fun startTwitchOAuth() {
         val clientId = configuredClientId()
         if (clientId.isBlank()) {
+            toast("Le Client ID Twitch n’est pas configuré.")
             configureTwitchClientId()
             return
         }
-        toast("Préparation de la connexion Twitch…")
-        Thread {
-            try {
-                val api = TwitchApi(clientId, "")
-                val device = api.requestDeviceCode()
-                val deviceCode = device.optString("device_code")
-                val userCode = device.optString("user_code")
-                val verifyUrl = device.optString("verification_uri", "https://www.twitch.tv/activate")
-                val intervalSeconds = device.optInt("interval", 5).coerceAtLeast(5)
-                val expiresIn = device.optInt("expires_in", 1800).coerceAtLeast(60)
-                if (deviceCode.isBlank() || userCode.isBlank()) throw IllegalStateException("Twitch n’a pas retourné de code de connexion.")
-                runOnUiThread {
-                    AlertDialog.Builder(this)
-                        .setTitle("Connexion sécurisée Twitch")
-                        .setMessage("1. Ouvre la page officielle Twitch.\n2. Connecte-toi chez Twitch et saisis ce code :\n\n$userCode\n\nNexaStream attendra l’autorisation ici. Ne partage pas ce code.")
-                        .setPositiveButton("Ouvrir Twitch") { _, _ ->
-                            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(verifyUrl)))
-                        }
-                        .setNeutralButton("J’ai autorisé") { _, _ ->
-                            toast("Vérification de l’autorisation en cours…")
-                        }
-                        .setNegativeButton("Fermer", null)
-                        .show()
-                }
-                var interval = intervalSeconds
-                val deadline = System.currentTimeMillis() + expiresIn * 1000L
-                var token: String? = null
-                while (System.currentTimeMillis() < deadline && token == null) {
-                    Thread.sleep(interval * 1000L)
-                    try {
-                        val response = api.pollDeviceToken(deviceCode)
-                        token = response.optString("access_token").takeIf { it.isNotBlank() }
-                    } catch (e: Exception) {
-                        val reason = e.message.orEmpty().lowercase()
-                        when {
-                            "authorization_pending" in reason || "authorization pending" in reason -> Unit
-                            "slow_down" in reason || "slow down" in reason -> interval += 5
-                            "expired_token" in reason || "expired token" in reason -> throw IllegalStateException("Le code Twitch a expiré. Relance la connexion.")
-                            "access_denied" in reason || "access denied" in reason -> throw IllegalStateException("Autorisation refusée dans Twitch.")
-                            else -> throw e
-                        }
-                    }
-                }
-                val received = token ?: throw IllegalStateException("Le code de connexion a expiré. Réessaie.")
-                prefs.edit().putString("twitch_access_token", received).apply()
-                val user = TwitchApi(clientId, received).currentUser()
-                prefs.edit().putString("twitch_user_id", user.optString("id"))
-                    .putString("twitch_user_name", user.optString("display_name"))
-                    .putStringSet("known_live_ids", emptySet()).apply()
-                runOnUiThread {
-                    toast("Connecté à Twitch : " + user.optString("display_name"))
-                    showTab("Accueil")
-                    checkForFollowedLiveNotifications()
-                }
-            } catch (e: Exception) {
-                runOnUiThread { toast("Connexion Twitch : " + (e.message ?: "échec")) }
-            }
-        }.start()
+        // Twitch OAuth is opened in the system browser; Twitch does not support
+        // collecting account passwords inside a third-party app WebView.
+        val authUrl = Uri.Builder()
+            .scheme("https")
+            .authority("id.twitch.tv")
+            .appendPath("oauth2")
+            .appendPath("authorize")
+            .appendQueryParameter("client_id", clientId)
+            .appendQueryParameter("redirect_uri", "nexastream://auth")
+            .appendQueryParameter("response_type", "token")
+            .appendQueryParameter("scope", "user:read:follows")
+            .appendQueryParameter("force_verify", "true")
+            .build()
+        try {
+            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, authUrl))
+        } catch (e: Exception) {
+            toast("Impossible d’ouvrir la page officielle Twitch.")
+        }
     }
 
     @Suppress("DEPRECATION")
