@@ -74,6 +74,7 @@ class MainActivity : Activity() {
         handleOAuthCallback(intent)
         showTab("Accueil")
         checkForFollowedLiveNotifications()
+        intent?.getStringExtra("open_channel")?.takeIf { it.isNotBlank() }?.let { openLive(it) }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -81,6 +82,7 @@ class MainActivity : Activity() {
         setIntent(intent)
         handleOAuthCallback(intent)
         showTab("Paramètres")
+        intent.getStringExtra("open_channel")?.takeIf { it.isNotBlank() }?.let { openLive(it) }
     }
 
     private fun handleOAuthCallback(intent: android.content.Intent?) {
@@ -401,6 +403,7 @@ class MainActivity : Activity() {
                 newlyLive.forEachIndexed { index, stream ->
                     val intent = android.content.Intent(this, MainActivity::class.java).apply {
                         flags = android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra("open_channel", stream.userName)
                     }
                     val pending = PendingIntent.getActivity(this, stream.id.hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
                     val notification = if (Build.VERSION.SDK_INT >= 26) android.app.Notification.Builder(this, "nexastream_live") else android.app.Notification.Builder(this)
