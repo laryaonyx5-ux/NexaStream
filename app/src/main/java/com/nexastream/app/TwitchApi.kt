@@ -46,6 +46,48 @@ class TwitchApi(private val clientId: String, private val accessToken: String) {
         }
     }
 
+    fun requestDeviceCode(): JSONObject {
+        val connection = (URL("https://id.twitch.tv/oauth2/device").openConnection() as HttpURLConnection)
+        connection.requestMethod = "POST"
+        connection.connectTimeout = 12000
+        connection.readTimeout = 12000
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        val body = "client_id=" + URLEncoder.encode(clientId, "UTF-8") +
+            "&scopes=" + URLEncoder.encode("user:read:follows user:read:subscriptions", "UTF-8")
+        return try {
+            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val json = JSONObject(stream.bufferedReader().use { it.readText() })
+            if (code !in 200..299) throw IllegalStateException(json.optString("message", "Twitch device authorization error"))
+            json
+        } finally { connection.disconnect() }
+    }
+
+    fun pollDeviceToken(deviceCode: String): JSONObject {
+        val connection = (URL("https://id.twitch.tv/oauth2/token").openConnection() as HttpURLConnection)
+        connection.requestMethod = "POST"
+        connection.connectTimeout = 12000
+        connection.readTimeout = 12000
+        connection.doOutput = true
+        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        val body = "client_id=" + URLEncoder.encode(clientId, "UTF-8") +
+            "&device_code=" + URLEncoder.encode(deviceCode, "UTF-8") +
+            "&grant_type=" + URLEncoder.encode("urn:ietf:params:oauth:grant-type:device_code", "UTF-8")
+        return try {
+            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val json = JSONObject(stream.bufferedReader().use { it.readText() })
+            if (code !in 200..299) {
+                val error = json.optString("message", json.optString("error", "Twitch token error"))
+                throw IllegalStateException(error)
+            }
+            json
+        } finally { connection.disconnect() }
+    }
+
     fun currentUser(): JSONObject {
         val rows = request("users").optJSONArray("data")
         if (rows == null || rows.length() == 0) throw IllegalStateException("Twitch n’a retourné aucun utilisateur.")
