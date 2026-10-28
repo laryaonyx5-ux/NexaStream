@@ -53,12 +53,18 @@ class MainActivity : Activity() {
         // Keep app content inside the usable screen area, below the status bar
         // and above Android's navigation bar, including Android 15 edge-to-edge.
         root.setOnApplyWindowInsetsListener { view, insets ->
-            view.setPadding(
-                insets.systemWindowInsetLeft,
-                insets.systemWindowInsetTop,
-                insets.systemWindowInsetRight,
-                insets.systemWindowInsetBottom
-            )
+            val bars = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                insets.getInsets(android.view.WindowInsets.Type.systemBars())
+            } else {
+                @Suppress("DEPRECATION")
+                android.graphics.Insets.of(
+                    insets.systemWindowInsetLeft,
+                    insets.systemWindowInsetTop,
+                    insets.systemWindowInsetRight,
+                    insets.systemWindowInsetBottom
+                )
+            }
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
         setContentView(root)
@@ -317,6 +323,14 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
         }, LinearLayout.LayoutParams(0, -2, 1f))
         if (screenTitle == "Twitch intégré") {
+            val clipsButton = Button(this).apply {
+                text = "Clips"
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                background = rounded(Color.rgb(39, 21, 57), dp(16), Color.rgb(151, 58, 255), dp(1))
+                setOnClickListener { webView?.loadUrl("https://www.twitch.tv/directory/all/clips") }
+            }
+            toolbar.addView(clipsButton, LinearLayout.LayoutParams(-2, dp(44)).apply { marginStart = dp(6) })
             val miniPlayer = Button(this).apply {
                 text = "Mini-lecteur"
                 textSize = 12f
@@ -361,7 +375,10 @@ class MainActivity : Activity() {
         val blockedHosts = listOf(
             "doubleclick.net", "googlesyndication.com", "googleadservices.com",
             "adnxs.com", "adsystem.com", "adservice.google.com", "amazon-adsystem.com",
-            "scorecardresearch.com", "quantserve.com", "analytics.tiktok.com"
+            "scorecardresearch.com", "quantserve.com", "analytics.tiktok.com",
+            "adnxs.com", "ads-twitter.com", "adsrvr.org", "adform.net",
+            "taboola.com", "outbrain.com", "criteo.com", "rubiconproject.com",
+            "pubmatic.com", "openx.net", "casalemedia.com", "advertising.com"
         )
         return blockedHosts.any { host == it || host.endsWith(".$it") }
     }
