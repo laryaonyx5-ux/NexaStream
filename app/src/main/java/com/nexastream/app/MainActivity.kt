@@ -2,6 +2,7 @@ package com.nexastream.app
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
@@ -25,6 +26,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Typeface
 import android.util.TypedValue
+import android.util.Rational
+import android.content.pm.PackageManager
 import java.io.ByteArrayInputStream
 import java.net.URI
 
@@ -36,6 +39,7 @@ class MainActivity : Activity() {
     private var homeView: View? = null
     private var blockerIcon: TextView? = null
     private var blockerState: TextView? = null
+    private var browserToolbar: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +51,26 @@ class MainActivity : Activity() {
         root.setBackgroundColor(Color.rgb(10, 8, 16))
         setContentView(root)
         showHome()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        browserToolbar?.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+    }
+
+    private fun enterMiniPlayer() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && webView != null) {
+            try {
+                val params = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+            } catch (_: Exception) {
+                android.widget.Toast.makeText(this, "Le mini-lecteur n’est pas disponible sur cet appareil.", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            android.widget.Toast.makeText(this, "Le mini-lecteur nécessite Android 8.0 ou plus.", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onBackPressed() {
@@ -229,6 +253,15 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
         }, LinearLayout.LayoutParams(0, -2, 1f))
+        val miniPlayer = Button(this).apply {
+            text = "Mini-lecteur"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            background = rounded(Color.rgb(39, 21, 57), dp(16), Color.rgb(151, 58, 255), dp(1))
+            setOnClickListener { enterMiniPlayer() }
+        }
+        toolbar.addView(miniPlayer, LinearLayout.LayoutParams(-2, dp(44)).apply { marginStart = dp(8) })
+        browserToolbar = toolbar
         container.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
 
         val browser = WebView(this)
