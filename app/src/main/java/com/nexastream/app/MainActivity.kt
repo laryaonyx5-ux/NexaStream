@@ -64,8 +64,8 @@ class MainActivity : Activity() {
         webView?.destroy()
         webView = null
         root.removeAllViews()
-        val background = CircuitBackground(this)
-        root.addView(background, FrameLayout.LayoutParams(-1, -1))
+        val backdrop = CircuitBackground(this)
+        root.addView(backdrop, FrameLayout.LayoutParams(-1, -1))
 
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
