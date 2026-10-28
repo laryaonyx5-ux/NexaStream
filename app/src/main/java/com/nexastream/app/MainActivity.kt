@@ -303,14 +303,16 @@ class MainActivity : Activity() {
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
         }, LinearLayout.LayoutParams(0, -2, 1f))
-        val miniPlayer = Button(this).apply {
-            text = "Mini-lecteur"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            background = rounded(Color.rgb(39, 21, 57), dp(16), Color.rgb(151, 58, 255), dp(1))
-            setOnClickListener { enterMiniPlayer() }
+        if (screenTitle == "Twitch intégré") {
+            val miniPlayer = Button(this).apply {
+                text = "Mini-lecteur"
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                background = rounded(Color.rgb(39, 21, 57), dp(16), Color.rgb(151, 58, 255), dp(1))
+                setOnClickListener { enterMiniPlayer() }
+            }
+            toolbar.addView(miniPlayer, LinearLayout.LayoutParams(-2, dp(44)).apply { marginStart = dp(8) })
         }
-        toolbar.addView(miniPlayer, LinearLayout.LayoutParams(-2, dp(44)).apply { marginStart = dp(8) })
         browserToolbar = toolbar
         container.addView(toolbar, LinearLayout.LayoutParams(-1, -2))
 
