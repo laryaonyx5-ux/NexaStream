@@ -94,7 +94,7 @@ class MainActivity : Activity() {
             toast("Connexion Twitch reçue. Vérification du compte…")
             Thread {
                 try {
-                    val api = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token)
+                    val api = TwitchApi(configuredClientId(), token)
                     val user = api.currentUser()
                     prefs.edit().putString("twitch_user_id", user.optString("id"))
                         .putString("twitch_user_name", user.optString("display_name")).apply()
@@ -109,8 +109,49 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun configuredClientId(): String =
+        prefs.getString("twitch_client_id", BuildConfig.TWITCH_CLIENT_ID)?.trim().orEmpty()
+
+    private fun configureTwitchClientId() {
+        val input = EditText(this).apply {
+            hint = "Client ID Twitch"
+            setText(prefs.getString("twitch_client_id", configuredClientId()))
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT
+            setTextColor(Color.WHITE)
+            setHintTextColor(muted)
+        }
+        val wrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(input, LinearLayout.LayoutParams(-1, dp(54)))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Configurer Twitch")
+            .setMessage("Colle ici le Client ID public de ton application créée dans la console développeur Twitch. URI de redirection exacte à enregistrer : nexastream://auth. Ne colle jamais de Client Secret ni ton mot de passe.")
+            .setView(wrapper)
+            .setNegativeButton("Annuler", null)
+            .setNeutralButton("Effacer") { _, _ ->
+                prefs.edit().remove("twitch_client_id").apply()
+                toast("Client ID local effacé.")
+                showTab("Paramètres")
+            }
+            .setPositiveButton("Enregistrer") { _, _ ->
+                val id = input.text.toString().trim()
+                if (id.isBlank()) {
+                    prefs.edit().remove("twitch_client_id").apply()
+                    toast("Client ID effacé.")
+                } else {
+                    prefs.edit().putString("twitch_client_id", id).apply()
+                    toast("Client ID enregistré sur cet appareil.")
+                }
+                showTab("Paramètres")
+            }
+            .show()
+    }
+
     private fun startTwitchOAuth() {
-        val clientId = BuildConfig.TWITCH_CLIENT_ID
+        val clientId = configuredClientId()
         if (clientId.isBlank()) {
             AlertDialog.Builder(this).setTitle("Connexion Twitch à configurer")
                 .setMessage("Le Client ID de l’application Twitch n’est pas encore défini. Il faut enregistrer NexaStream dans le portail développeur Twitch avec l’URI de redirection exacte : nexastream://auth. Ensuite, ajouter TWITCH_CLIENT_ID dans la configuration Gradle de la compilation. Aucun mot de passe Twitch ne doit être saisi dans NexaStream.")
@@ -294,14 +335,14 @@ class MainActivity : Activity() {
     private fun checkForFollowedLiveNotifications() {
         val token = prefs.getString("twitch_access_token", null) ?: return
         val userId = prefs.getString("twitch_user_id", null) ?: return
-        if (BuildConfig.TWITCH_CLIENT_ID.isBlank()) return
+        if (configuredClientId().isBlank()) return
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1701)
             return
         }
         Thread {
             try {
-                val streams = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token).followedStreams(userId)
+                val streams = TwitchApi(configuredClientId(), token).followedStreams(userId)
                 val currentIds = streams.map { it.id }.toSet()
                 val previous = prefs.getStringSet("known_live_ids", emptySet()) ?: emptySet()
                 val newlyLive = if (previous.isEmpty()) emptyList() else streams.filter { it.id !in previous }
@@ -327,14 +368,14 @@ class MainActivity : Activity() {
 
     private fun loadTopStreams(container: LinearLayout) {
         val token = prefs.getString("twitch_access_token", null)
-        if (BuildConfig.TWITCH_CLIENT_ID.isBlank() || token.isNullOrBlank()) {
+        if (configuredClientId().isBlank() || token.isNullOrBlank()) {
             emptyState(container, "◉", "Connecte ton compte Twitch", "Les vrais lives apparaîtront ici après configuration du Client ID et connexion officielle.")
             return
         }
         emptyState(container, "◉", "Chargement des lives…", "Récupération des données officielles Twitch.")
         Thread {
             try {
-                val streams = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token).topStreams()
+                val streams = TwitchApi(configuredClientId(), token).topStreams()
                 runOnUiThread {
                     container.removeAllViews()
                     if (streams.isEmpty()) emptyState(container, "◉", "Aucun live retourné", "Twitch n’a renvoyé aucun live pour cette requête.")
@@ -353,14 +394,40 @@ class MainActivity : Activity() {
     private fun loadFollowedStreams(container: LinearLayout) {
         val token = prefs.getString("twitch_access_token", null)
         val userId = prefs.getString("twitch_user_id", null)
-        if (token.isNullOrBlank() || userId.isNullOrBlank() || BuildConfig.TWITCH_CLIENT_ID.isBlank()) {
+        if (token.isNullOrBlank() || userId.isNullOrBlank() || configuredClientId().isBlank()) {
             emptyState(container, "♡", "Aucun compte connecté", "Connecte-toi via Twitch pour afficher toutes tes chaînes suivies, en direct ou hors ligne.")
             return
         }
         emptyState(container, "♡", "Chargement des suivis…", "Récupération des chaînes suivies depuis Twitch.")
         Thread {
             try {
-                val channels = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token).followedChannels(userId)
+                val channels = TwitchApi(configuredClientId(), token).followedChannels(userId)
+                runOnUiThread {
+                    container.removeAllViews()
+                    if (channels.isEmpty()) emptyState(container, "♡", "Aucune chaîne suivie", "Twitch n’a retourné aucune chaîne suivie pour ce compte.")
+                    channels.forEach { channel ->
+                        val subtitle = if (channel.isLive) "EN DIRECT • " + channel.gameName + " • " + channel.title
+                            else "Hors ligne" + if (channel.title.isNotBlank()) " • " + channel.title else ""
+                        actionCard(container, if (channel.isLive) "●" else "○", channel.displayName, subtitle) { openLive(channel.name) }
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { container.removeAllViews(); emptyState(container, "!", "Erreur des suivis", e.message ?: "Vérifie les autorisations Twitch.") }
+            }
+        }.start()
+    }
+
+    private fun loadFollowedChannels(container: LinearLayout) {
+        val token = prefs.getString("twitch_access_token", null)
+        val userId = prefs.getString("twitch_user_id", null)
+        if (token.isNullOrBlank() || userId.isNullOrBlank() || configuredClientId().isBlank()) {
+            emptyState(container, "♡", "Aucun compte connecté", "Configure le Client ID puis connecte-toi via Twitch pour voir les chaînes suivies, en direct ou hors ligne.")
+            return
+        }
+        emptyState(container, "♡", "Chargement des chaînes suivies…", "Récupération des abonnements de ton compte Twitch.")
+        Thread {
+            try {
+                val channels = TwitchApi(configuredClientId(), token).followedChannels(userId)
                 runOnUiThread {
                     container.removeAllViews()
                     if (channels.isEmpty()) emptyState(container, "♡", "Aucune chaîne suivie", "Twitch n’a retourné aucune chaîne suivie pour ce compte.")
@@ -378,7 +445,7 @@ class MainActivity : Activity() {
 
     private fun loadSearchResults(query: String, container: LinearLayout) {
         val token = prefs.getString("twitch_access_token", null)
-        if (token.isNullOrBlank() || BuildConfig.TWITCH_CLIENT_ID.isBlank()) {
+        if (token.isNullOrBlank() || configuredClientId().isBlank()) {
             emptyState(container, "⌕", "Connexion Twitch nécessaire", "Connecte-toi dans Réglages pour rechercher des chaînes et lives réels.")
             container.addView(actionButton("Connecter Twitch", "Connexion Twitch") { startTwitchOAuth() }, fullWidth())
             return
@@ -386,7 +453,7 @@ class MainActivity : Activity() {
         emptyState(container, "⌕", "Recherche en cours…", "Interrogation de l’API officielle Twitch.")
         Thread {
             try {
-                val api = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token)
+                val api = TwitchApi(configuredClientId(), token)
                 val streams = api.searchStreams(query)
                 val channels = if (streams.isEmpty()) api.searchChannels(query) else emptyList()
                 runOnUiThread {
@@ -444,7 +511,7 @@ class MainActivity : Activity() {
         label(parent, "Chaînes suivies actuellement en direct sur ton compte Twitch.", 14f, muted, top = 8, bottom = 18)
         val followContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         parent.addView(followContainer, fullWidth())
-        loadFollowedStreams(followContainer)
+        loadFollowedChannels(followContainer)
         actionCard(parent, "◎", "Connexion officielle Twitch", "Connecter ou reconnecter ton compte") { startTwitchOAuth() }
     }
 
@@ -472,13 +539,14 @@ class MainActivity : Activity() {
         label(parent, "Paramètres", 25f, Color.WHITE, true, top = 6)
         val connectedName = prefs.getString("twitch_user_name", null)
         actionCard(parent, "◎", if (connectedName.isNullOrBlank()) "Connexion officielle Twitch" else "Connecté : $connectedName", if (connectedName.isNullOrBlank()) "Se connecter via la page officielle Twitch" else "Appuie pour reconnecter le compte") { startTwitchOAuth() }
+        actionCard(parent, "🔑", "Client ID Twitch", if (configuredClientId().isBlank()) "Non configuré — appuie pour le définir sans recompiler" else "Configuré sur cet appareil — appuie pour modifier") { configureTwitchClientId() }
         if (!connectedName.isNullOrBlank()) actionCard(parent, "↪", "Déconnecter Twitch", "Supprimer le jeton local de cet appareil") {
             prefs.edit().remove("twitch_access_token").remove("twitch_user_id").remove("twitch_user_name").apply()
             toast("Compte Twitch déconnecté de NexaStream.")
             showTab("Paramètres")
         }
         label(parent, "Connexion officielle", 18f, Color.WHITE, true, top = 12)
-        label(parent, "La connexion sera faite par Twitch OAuth, sans demander ton mot de passe à NexaStream. Pour activer cette étape, il faut enregistrer l’application dans le portail développeur Twitch et définir son Client ID et son URI de redirection. Je ne peux pas inventer ces identifiants.", 13f, muted, top = 6, bottom = 14)
+        label(parent, "La connexion passe par Twitch OAuth et ne demande jamais ton mot de passe dans NexaStream. Crée l’application dans la console développeur Twitch, enregistre exactement nexastream://auth comme URI de redirection, puis colle son Client ID public ci-dessus. Cette configuration reste sur cet appareil et ne nécessite pas une nouvelle compilation.", 13f, muted, top = 6, bottom = 14)
         actionCard(parent, "🛡", "Filtre de domaines", if (blockerEnabled) "Activé — filtre les requêtes ciblées par NexaStream" else "Désactivé") {
             blockerEnabled = !blockerEnabled
             prefs.edit().putBoolean("ad_blocker_enabled", blockerEnabled).apply()
