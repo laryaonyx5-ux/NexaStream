@@ -86,30 +86,59 @@ class MainActivity : Activity() {
     }
 
     private fun handleOAuthCallback(intent: android.content.Intent?) {
-        val fragment = intent?.data?.fragment ?: return
-        val values = fragment.split("&").mapNotNull { part ->
-            val bits = part.split("=", limit = 2)
-            if (bits.size == 2) bits[0] to bits[1] else null
-        }.toMap()
-        val token = values["access_token"]
-        if (!token.isNullOrBlank()) {
-            prefs.edit().putString("twitch_access_token", token).apply()
-            toast("Connexion Twitch reçue. Vérification du compte…")
-            Thread {
-                try {
-                    val api = TwitchApi(configuredClientId(), token)
-                    val user = api.currentUser()
-                    prefs.edit().putString("twitch_user_id", user.optString("id"))
-                        .putString("twitch_user_name", user.optString("display_name")).apply()
-                    runOnUiThread { toast("Connecté à Twitch : " + user.optString("display_name")); showTab("Accueil"); checkForFollowedLiveNotifications() }
-                } catch (e: Exception) {
-                    prefs.edit().remove("twitch_access_token").apply()
-                    runOnUiThread { toast("Connexion refusée : " + (e.message ?: "erreur Twitch")) }
-                }
-            }.start()
-        } else if (!values["error"].isNullOrBlank()) {
-            toast("Connexion Twitch annulée ou refusée : " + values["error"])
+        val uri = intent?.data ?: return
+        if (uri.scheme != "nexastream" || uri.host != "auth") return
+
+        val values = linkedMapOf<String, String>()
+        uri.queryParameterNames.forEach { key ->
+            uri.getQueryParameter(key)?.let { values[key] = it }
         }
+        uri.fragment?.split("&")?.forEach { part ->
+            val bits = part.split("=", limit = 2)
+            if (bits.size == 2) {
+                val key = java.net.URLDecoder.decode(bits[0], "UTF-8")
+                val value = java.net.URLDecoder.decode(bits[1], "UTF-8")
+                values[key] = value
+            }
+        }
+
+        val expectedState = prefs.getString("twitch_oauth_state", null)
+        prefs.edit().remove("twitch_oauth_state").apply()
+        if (expectedState.isNullOrBlank() || values["state"] != expectedState) {
+            toast("Retour de connexion Twitch invalide. Réessaie.")
+            return
+        }
+
+        val error = values["error"]
+        if (!error.isNullOrBlank()) {
+            toast("Connexion Twitch refusée : " + error)
+            return
+        }
+
+        val token = values["access_token"]
+        if (token.isNullOrBlank()) {
+            toast("Twitch n’a pas renvoyé de jeton. Vérifie la configuration OAuth.")
+            return
+        }
+
+        prefs.edit().putString("twitch_access_token", token).apply()
+        toast("Connexion Twitch reçue. Vérification du compte…")
+        Thread {
+            try {
+                val api = TwitchApi(configuredClientId(), token)
+                val user = api.currentUser()
+                prefs.edit().putString("twitch_user_id", user.optString("id"))
+                    .putString("twitch_user_name", user.optString("display_name")).apply()
+                runOnUiThread {
+                    toast("Connecté à Twitch : " + user.optString("display_name"))
+                    showTab("Accueil")
+                    checkForFollowedLiveNotifications()
+                }
+            } catch (e: Exception) {
+                prefs.edit().remove("twitch_access_token").apply()
+                runOnUiThread { toast("Connexion refusée : " + (e.message ?: "erreur Twitch")) }
+            }
+        }.start()
     }
 
     private fun configuredClientId(): String =
@@ -160,76 +189,27 @@ class MainActivity : Activity() {
             configureTwitchClientId()
             return
         }
-        toast("Préparation de la connexion officielle Twitch…")
-        Thread {
-            try {
-                val api = TwitchApi(clientId, "")
-                val device = api.requestDeviceCode()
-                val deviceCode = device.optString("device_code")
-                val userCode = device.optString("user_code")
-                val verifyUrl = device.optString("verification_uri", "https://www.twitch.tv/activate")
-                val interval = device.optInt("interval", 5).coerceAtLeast(3)
-                val expiresIn = device.optInt("expires_in", 1800)
-                if (deviceCode.isBlank() || userCode.isBlank()) throw IllegalStateException("Twitch n’a pas fourni de code de connexion.")
-                runOnUiThread {
-                    AlertDialog.Builder(this)
-                        .setTitle("Connexion officielle Twitch")
-                        .setMessage("1. Ouvre la page officielle Twitch.\n2. Saisis ce code :\n\n$userCode\n\nLaisse NexaStream ouvert pendant la validation.")
-                        .setNegativeButton("Annuler", null)
-                        .setNeutralButton("Copier le code") { _, _ ->
-                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Code Twitch", userCode))
-                            toast("Code Twitch copié.")
-                        }
-                        .setPositiveButton("Ouvrir Twitch") { _, _ ->
-                            try {
-                                startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(verifyUrl)))
-                            } catch (_: Exception) {
-                                toast("Ouvre twitch.tv/activate dans ton navigateur.")
-                            }
-                            Thread {
-                                val deadline = System.currentTimeMillis() + expiresIn * 1000L
-                                var finished = false
-                                while (!finished && System.currentTimeMillis() < deadline) {
-                                    try {
-                                        val tokenResponse = api.pollDeviceToken(deviceCode)
-                                        val token = tokenResponse.optString("access_token")
-                                        if (token.isNotBlank()) {
-                                            val user = TwitchApi(clientId, token).currentUser()
-                                            prefs.edit().putString("twitch_access_token", token)
-                                                .putString("twitch_user_id", user.optString("id"))
-                                                .putString("twitch_user_name", user.optString("display_name"))
-                                                .apply()
-                                            runOnUiThread {
-                                                toast("Connecté à Twitch : " + user.optString("display_name"))
-                                                showTab("Accueil")
-                                                checkForFollowedLiveNotifications()
-                                            }
-                                            finished = true
-                                        } else {
-                                            Thread.sleep(interval * 1000L)
-                                        }
-                                    } catch (e: Exception) {
-                                        val message = e.message.orEmpty().lowercase()
-                                        if (message.contains("authorization_pending") || message.contains("pending")) {
-                                            try { Thread.sleep(interval * 1000L) } catch (_: InterruptedException) { finished = true }
-                                        } else if (message.contains("slow_down")) {
-                                            try { Thread.sleep((interval + 5) * 1000L) } catch (_: InterruptedException) { finished = true }
-                                        } else {
-                                            runOnUiThread { toast("Connexion Twitch : " + (e.message ?: "réessaie")) }
-                                            finished = true
-                                        }
-                                    }
-                                }
-                                if (!finished) runOnUiThread { toast("Code expiré. Relance la connexion Twitch.") }
-                            }.start()
-                        }
-                        .show()
-                }
-            } catch (e: Exception) {
-                runOnUiThread { toast("Impossible de démarrer la connexion Twitch : " + (e.message ?: "erreur réseau")) }
-            }
-        }.start()
+
+        // Twitch's implicit grant returns the user token in the redirect URI fragment.
+        // The redirect URI must also be registered exactly in the Twitch developer console.
+        val redirectUri = "nexastream://auth"
+        val state = java.util.UUID.randomUUID().toString()
+        prefs.edit().putString("twitch_oauth_state", state).apply()
+        val scopes = "user:read:follows"
+        val authUri = Uri.parse("https://id.twitch.tv/oauth2/authorize").buildUpon()
+            .appendQueryParameter("client_id", clientId)
+            .appendQueryParameter("redirect_uri", redirectUri)
+            .appendQueryParameter("response_type", "token")
+            .appendQueryParameter("scope", scopes)
+            .appendQueryParameter("state", state)
+            .build()
+
+        try {
+            toast("Ouverture de la connexion officielle Twitch…")
+            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, authUri))
+        } catch (e: Exception) {
+            toast("Impossible d’ouvrir Twitch : " + (e.message ?: "erreur"))
+        }
     }
 
     @Suppress("DEPRECATION")
