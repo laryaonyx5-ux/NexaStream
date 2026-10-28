@@ -131,7 +131,7 @@ class MainActivity : Activity() {
         }
         AlertDialog.Builder(this)
             .setTitle("Configurer Twitch")
-            .setMessage("Colle ici le Client ID public de ton application créée dans la console développeur Twitch. La connexion utilise un code temporaire Twitch, sans URI de redirection. Ne colle jamais de Client Secret ni ton mot de passe.")
+            .setMessage("Client ID public de ton application Twitch. Il est normalement déjà intégré à NexaStream. Ne colle jamais de Client Secret ni ton mot de passe Twitch.")
             .setView(wrapper)
             .setNegativeButton("Annuler", null)
             .setNeutralButton("Effacer") { _, _ ->
@@ -248,6 +248,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(18) })
         parent.addView(hero, fullWidth().apply { bottomMargin = dp(22) })
 
+        actionCard(parent, "◎", "Se connecter à Twitch", "Connecte ton compte pour charger tes chaînes suivies") { startTwitchOAuth() }
         sectionTitle(parent, "En direct", "Les streams officiels Twitch, triés par audience")
         val liveContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         parent.addView(liveContainer, fullWidth())
@@ -588,7 +589,7 @@ class MainActivity : Activity() {
             showTab("Paramètres")
         }
         label(parent, "Connexion officielle", 18f, Color.WHITE, true, top = 12)
-        label(parent, "La connexion utilise le flux officiel Twitch Device Code : NexaStream affiche un code temporaire, tu l’autorises sur Twitch, puis l’application récupère le jeton. Aucun mot de passe Twitch n’est saisi dans NexaStream. Il faut toutefois le Client ID public d’une application enregistrée dans la console développeur Twitch.", 13f, muted, top = 6, bottom = 14)
+        label(parent, "La connexion ouvre la page officielle Twitch dans ton navigateur. Dans la console développeur Twitch, l’URI de redirection autorisée doit correspondre exactement à nexastream://auth. Aucun mot de passe Twitch n’est saisi dans NexaStream.", 13f, muted, top = 6, bottom = 14)
         actionCard(parent, "🛡", "Filtre de domaines", if (blockerEnabled) "Activé — filtre les requêtes ciblées par NexaStream" else "Désactivé") {
             blockerEnabled = !blockerEnabled
             prefs.edit().putBoolean("ad_blocker_enabled", blockerEnabled).apply()
