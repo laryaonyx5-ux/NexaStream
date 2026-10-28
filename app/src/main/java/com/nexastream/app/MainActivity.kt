@@ -354,18 +354,20 @@ class MainActivity : Activity() {
         val token = prefs.getString("twitch_access_token", null)
         val userId = prefs.getString("twitch_user_id", null)
         if (token.isNullOrBlank() || userId.isNullOrBlank() || BuildConfig.TWITCH_CLIENT_ID.isBlank()) {
-            emptyState(container, "♡", "Aucun compte connecté", "Connecte-toi via Twitch pour afficher les chaînes suivies et leurs lives réels.")
+            emptyState(container, "♡", "Aucun compte connecté", "Connecte-toi via Twitch pour afficher toutes tes chaînes suivies, en direct ou hors ligne.")
             return
         }
-        emptyState(container, "♡", "Chargement des suivis…", "Récupération des chaînes suivies qui sont en direct.")
+        emptyState(container, "♡", "Chargement des suivis…", "Récupération des chaînes suivies depuis Twitch.")
         Thread {
             try {
-                val streams = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token).followedStreams(userId)
+                val channels = TwitchApi(BuildConfig.TWITCH_CLIENT_ID, token).followedChannels(userId)
                 runOnUiThread {
                     container.removeAllViews()
-                    if (streams.isEmpty()) emptyState(container, "♡", "Aucune chaîne suivie en direct", "Tes suivis sont connectés, mais aucun live n’a été retourné.")
-                    streams.forEach { stream ->
-                        actionCard(container, "●", stream.userName, stream.title + "\n" + stream.gameName + " • " + stream.viewerCount + " spectateurs") { openLive(stream.userName) }
+                    if (channels.isEmpty()) emptyState(container, "♡", "Aucune chaîne suivie", "Twitch n’a retourné aucune chaîne suivie pour ce compte.")
+                    channels.forEach { channel ->
+                        val subtitle = if (channel.isLive) "EN DIRECT • " + channel.gameName + " • " + channel.title
+                            else "Hors ligne" + if (channel.title.isNotBlank()) " • " + channel.title else ""
+                        actionCard(container, if (channel.isLive) "●" else "○", channel.displayName, subtitle) { openLive(channel.name) }
                     }
                 }
             } catch (e: Exception) {
