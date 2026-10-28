@@ -70,6 +70,7 @@ class MainActivity : Activity() {
         setContentView(root)
         root.requestApplyInsets()
         createNotificationChannel()
+        FollowedLiveWorker.schedule(this)
         handleOAuthCallback(intent)
         showTab("Accueil")
         checkForFollowedLiveNotifications()
