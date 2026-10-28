@@ -482,28 +482,52 @@ class MainActivity : Activity() {
         root.addView(CircuitBackground(this), FrameLayout.LayoutParams(-1, -1))
         val shell = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(8), dp(10), dp(8)) }
         root.addView(shell, FrameLayout.LayoutParams(-1, -1))
-        shell.addView(actionButton("‹  Retour", "Retour à l’accueil") { showTab("Accueil") }, LinearLayout.LayoutParams(-2, dp(44)))
+        shell.addView(actionButton("‹  Retour", "Retour") { showTab("Accueil") }, LinearLayout.LayoutParams(-2, dp(44)))
         label(shell, "LIVE • $channel", 20f, Color.WHITE, true, top = 10, bottom = 8)
-        label(shell, "Le lecteur vidéo dépend des options de lecture autorisées par Twitch. Le chat officiel est intégré ci-dessous.", 12f, muted, bottom = 8)
+        label(shell, "Lecteur Twitch officiel et chat intégré. Appuie sur Lecture si le démarrage automatique est refusé.", 12f, muted, bottom = 8)
+
         val browser = WebView(this)
         chatWebView = browser
         browser.settings.javaScriptEnabled = true
         browser.settings.domStorageEnabled = true
         browser.settings.loadsImagesAutomatically = true
-        browser.settings.javaScriptCanOpenWindowsAutomatically = true
+        browser.settings.javaScriptCanOpenWindowsAutomatically = false
         browser.settings.setSupportMultipleWindows(false)
-        browser.settings.mediaPlaybackRequiresUserGesture = false
+        browser.settings.mediaPlaybackRequiresUserGesture = true
+        browser.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(browser, true)
         browser.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 val url = request?.url?.toString() ?: return null
-                if (blockerEnabled && isKnownAdOrTracker(url)) return WebResourceResponse("text/plain", "utf-8", 204, "Blocked by NexaStream", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                if (blockerEnabled && isKnownAdOrTracker(url)) {
+                    return WebResourceResponse("text/plain", "utf-8", 204, "Blocked by NexaStream", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                }
                 return super.shouldInterceptRequest(view, request)
+            }
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val host = request.url.host?.lowercase().orEmpty()
+                return host !in setOf("www.twitch.tv", "twitch.tv", "player.twitch.tv", "m.twitch.tv", "id.twitch.tv", "api.twitch.tv", "static-cdn.jtvnw.net", "gql.twitch.tv")
             }
         }
         shell.addView(browser, LinearLayout.LayoutParams(-1, 0, 1f))
-        browser.loadUrl("https://www.twitch.tv/popout/" + Uri.encode(channel) + "/chat?popout=")
+        val safeChannel = channel.lowercase().filter { it.isLetterOrDigit() || it == '_' }
+        val page = """
+            <!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+            <style>
+              *{box-sizing:border-box}body{margin:0;background:#0a0810;color:#fff;font-family:Arial,sans-serif}
+              .player{width:100%;aspect-ratio:16/9;min-height:220px;background:#000}
+              iframe{border:0;width:100%;height:100%;display:block}
+              .chat{height:48vh;min-height:260px;border-top:1px solid #38264b}
+              .caption{padding:8px 10px;color:#c9b7dc;font-size:12px}
+            </style></head><body>
+            <div class="player"><iframe title="Lecteur Twitch officiel" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen
+              src="https://player.twitch.tv/?channel=$safeChannel&parent=www.twitch.tv&parent=twitch.tv&autoplay=false&muted=false&layout=video"></iframe></div>
+            <div class="caption">Vidéo officielle Twitch • $safeChannel</div>
+            <div class="chat"><iframe title="Chat Twitch officiel" allow="clipboard-write" src="https://www.twitch.tv/popout/$safeChannel/chat?popout="></iframe></div>
+            </body></html>
+        """.trimIndent()
+        browser.loadDataWithBaseURL("https://www.twitch.tv/", page, "text/html", "UTF-8", null)
     }
 
     private fun followingContent(parent: LinearLayout) {
@@ -520,7 +544,9 @@ class MainActivity : Activity() {
         val host = try { URI(url).host?.lowercase() ?: return false } catch (_: Exception) { return false }
         val blockedHosts = listOf("doubleclick.net", "googlesyndication.com", "googleadservices.com",
             "adnxs.com", "adsystem.com", "adservice.google.com", "amazon-adsystem.com",
-            "scorecardresearch.com", "quantserve.com", "analytics.tiktok.com")
+            "scorecardresearch.com", "quantserve.com", "analytics.tiktok.com", "adroll.com",
+            "criteo.com", "criteo.net", "taboola.com", "outbrain.com", "adsafeprotected.com",
+            "serving-sys.com", "adform.net", "smartadserver.com", "rubiconproject.com")
         return blockedHosts.any { host == it || host.endsWith(".$it") }
     }
 
